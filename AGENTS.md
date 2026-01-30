@@ -35,7 +35,8 @@
 - Tailwind 透過 Vite 與 `src/index.css` 連接，請維持既有使用方式。
 
 ## Agent 專用指示
-- 所有 agent 互動、程式碼、文件均使用繁體中文。
+- 所有 agent 互動與文件均使用繁體中文。
+- 程式碼內僅註解使用繁體中文；程式碼本身使用英文命名。
 - UI 文字與介面文案一律使用英文。
 
 ## UI 與設計規範
@@ -52,6 +53,11 @@
   - `https://docs.suilend.fi/ecosystem/suilend-sdk-guide`
   - `https://github.com/CetusProtocol/aggregator`
   - `https://github.com/CetusProtocol/cetus-sdk-v2`
+- 網路環境統一使用 Sui mainnet，不需支援多網路切換。
+- 資料來源優先透過官方 SDK 取得；若需定時更新，採 5 秒輪詢。
+- 頁面提供 `Refresh` 按鈕供使用者手動更新資料。
+- APR 僅顯示加總值；hover 時以多行顯示組成明細。
+- Sui 錢包整合以 Mysten Labs dApp Kit 為主，無需自訂錢包設定。
 
 ## 開發流程與品質控管
 - 每完成一個段落後，需執行 `npm run lint` 與 `npm run build` 確認無錯誤。
