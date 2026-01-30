@@ -1,5 +1,5 @@
 import { CopyIcon } from "lucide-react"
-import { useCurrentAccount } from "@mysten/dapp-kit-react"
+import { useCurrentAccount } from "@mysten/dapp-kit"
 
 import { Button } from "@/components/ui/button"
 

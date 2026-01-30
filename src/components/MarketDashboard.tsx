@@ -1,6 +1,6 @@
 import * as React from "react"
 import { RefreshCcwIcon } from "lucide-react"
-import { useCurrentAccount } from "@mysten/dapp-kit-react"
+import { useCurrentAccount } from "@mysten/dapp-kit"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
