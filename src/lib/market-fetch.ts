@@ -1,5 +1,5 @@
-import { Scallop } from "@scallop-io/sui-scallop-sdk"
-import { getPools, getLendingState } from "@naviprotocol/lending"
+import { Scallop, type MarketPool } from "@scallop-io/sui-scallop-sdk"
+import { getPools, getLendingState, type Pool } from "@naviprotocol/lending"
 
 import { normalizeAssetSymbol, type MarketRow, type AssetSymbol } from "@/lib/market-data"
 import { createPositionKey, type WalletPositions } from "@/lib/positions"
@@ -37,10 +37,33 @@ async function fetchScallop(address?: string | null): Promise<MarketFetchResult>
   const query = scallop.client.query
   const market = await query.queryMarket({ indexer: true })
   const pools = Object.values(market.pools ?? {})
+  const preferredCoinName: Record<AssetSymbol, string> = {
+    SUI: "sui",
+    USDC: "wusdc",
+    USDT: "wusdt",
+  }
+  const selectedPools = pools.reduce<Partial<Record<AssetSymbol, MarketPool>>>(
+    (acc, pool) => {
+      if (!pool) return acc
+      const asset = toAssetSymbol(pool.symbol)
+      if (!asset) return acc
+      const preferred = preferredCoinName[asset]
+      const existing = acc[asset]
+      if (!existing) {
+        acc[asset] = pool
+        return acc
+      }
+      if (pool.coinName === preferred && existing.coinName !== preferred) {
+        acc[asset] = pool
+      }
+      return acc
+    },
+    {}
+  )
 
-  const rows = pools
+  const rows = Object.values(selectedPools)
+    .filter((pool): pool is MarketPool => Boolean(pool))
     .map((pool) => {
-      if (!pool) return null
       const asset = toAssetSymbol(pool.symbol)
       if (!asset) return null
       const row: MarketRow = {
@@ -88,7 +111,24 @@ function buildNaviIncentives(
 
 async function fetchNavi(address?: string | null): Promise<MarketFetchResult> {
   const pools = await getPools({ env: "prod" })
-  const rows = pools
+  const selectedPools = pools.reduce<Partial<Record<AssetSymbol, Pool>>>(
+    (acc, pool) => {
+      const asset = toAssetSymbol(pool.token?.symbol)
+      if (!asset) return acc
+      const existing = acc[asset]
+      if (!existing) {
+        acc[asset] = pool
+        return acc
+      }
+      if (pool.isSuiBridge && !existing.isSuiBridge) {
+        acc[asset] = pool
+      }
+      return acc
+    },
+    {}
+  )
+  const rows = Object.values(selectedPools)
+    .filter((pool): pool is Pool => Boolean(pool))
     .map((pool) => {
       const asset = toAssetSymbol(pool.token?.symbol)
       if (!asset) return null
