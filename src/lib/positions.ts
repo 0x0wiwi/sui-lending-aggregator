@@ -4,10 +4,9 @@ export type PositionKey = `${Protocol}-${AssetSymbol}`
 
 export type WalletPositions = Partial<Record<PositionKey, number>>
 
-export function getMockPositions(address: string | null): WalletPositions {
-  if (!address) return {}
-  return {
-    "Scallop-SUI": 24.5,
-    "Suilend-USDC": 1200,
-  }
+export function createPositionKey(
+  protocol: Protocol,
+  asset: AssetSymbol
+): PositionKey {
+  return `${protocol}-${asset}`
 }

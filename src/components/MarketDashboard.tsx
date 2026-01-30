@@ -8,7 +8,6 @@ import { FiltersBar } from "@/components/FiltersBar"
 import { MarketTable, type SortDirection, type SortKey } from "@/components/MarketTable"
 import { useMarketData } from "@/hooks/use-market-data"
 import { type MarketRow } from "@/lib/market-data"
-import { getMockPositions } from "@/lib/positions"
 
 type FilterState = {
   assets: string[]
@@ -61,11 +60,9 @@ function formatTimestamp(value: Date | null) {
 }
 
 export function MarketDashboard() {
-  const { rows, updatedAt, refresh } = useMarketData()
   const account = useCurrentAccount()
-  const positions = React.useMemo(
-    () => getMockPositions(account?.address ?? null),
-    [account?.address]
+  const { rows, updatedAt, refresh, positions, isLoading } = useMarketData(
+    account?.address
   )
 
   const [filters, setFilters] = React.useState<FilterState>(defaultFilters)
@@ -131,7 +128,12 @@ export function MarketDashboard() {
           <div className="flex flex-col items-start gap-2 md:items-end">
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
               <span>Last updated: {formatTimestamp(updatedAt)}</span>
-              <Button variant="outline" size="sm" onClick={refresh}>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={refresh}
+                disabled={isLoading}
+              >
                 <RefreshCcwIcon />
                 Refresh
               </Button>
