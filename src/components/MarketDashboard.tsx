@@ -109,7 +109,11 @@ export function MarketDashboard() {
     .filter((row) =>
       filters.protocols.length ? filters.protocols.includes(row.protocol) : true
     )
-    .filter((row) => (filters.onlyIncentive ? row.incentiveApr > 0 : true))
+    .filter((row) =>
+      filters.onlyIncentive
+        ? row.supplyIncentiveApr > 0 || row.borrowIncentiveApr > 0
+        : true
+    )
     .filter((row) => {
       if (!filters.onlyPosition) return true
       const position = positions[`${row.protocol}-${row.asset}`] ?? 0
@@ -120,7 +124,7 @@ export function MarketDashboard() {
 
   return (
     <div className="grid gap-6">
-      <Card>
+      <Card className="overflow-visible">
         <CardHeader className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div>
             <CardTitle>Lending Markets</CardTitle>
@@ -140,7 +144,7 @@ export function MarketDashboard() {
             </div>
           </div>
         </CardHeader>
-        <CardContent className="grid gap-4">
+        <CardContent className="grid gap-4 overflow-visible">
           <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
             <FiltersBar
               selectedAssets={filters.assets}

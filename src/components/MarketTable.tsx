@@ -1,3 +1,4 @@
+import * as React from "react"
 import { ChevronDownIcon, ChevronUpIcon } from "lucide-react"
 
 import { Badge } from "@/components/ui/badge"
@@ -12,7 +13,6 @@ export type SortKey =
   | "protocol"
   | "supplyApr"
   | "borrowApr"
-  | "incentiveApr"
   | "utilization"
   | "yourSupply"
 
@@ -26,8 +26,10 @@ type MarketTableProps = {
   onSort: (key: SortKey) => void
 }
 
-const formatApr = (value: number) => `${value.toFixed(2)}%`
-const formatUtilization = (value: number) => `${value.toFixed(1)}%`
+const formatApr = (value: number) =>
+  Number.isFinite(value) ? `${value.toFixed(3)}%` : "—"
+const formatUtilization = (value: number) =>
+  Number.isFinite(value) ? `${value.toFixed(3)}%` : "—"
 
 function getPositionAmount(
   positions: WalletPositions,
@@ -38,24 +40,70 @@ function getPositionAmount(
   return positions[key] ?? null
 }
 
-function IncentiveCell({ row }: { row: MarketRow }) {
-  if (row.incentiveApr <= 0) {
-    return <span className="text-muted-foreground">—</span>
-  }
-
+function AprCell({
+  totalApr,
+  baseApr,
+  incentiveApr,
+  breakdown,
+  hoverLabel,
+  row,
+}: {
+  totalApr: number
+  baseApr: number
+  incentiveApr: number
+  breakdown?: MarketRow["supplyIncentiveBreakdown"]
+  hoverLabel: "Supply" | "Borrow"
+  row: MarketRow
+}) {
+  const hasIncentive = incentiveApr > 0
+  const [open, setOpen] = React.useState(false)
+  const incentivePrefix = hoverLabel === "Borrow" ? "-" : "+"
+  const incentiveClass =
+    hoverLabel === "Borrow"
+      ? "text-rose-600 dark:text-rose-400"
+      : "text-emerald-600 dark:text-emerald-400"
+  const netLabel = hoverLabel === "Borrow" ? "Net cost" : "Net yield"
+  const netValue =
+    hoverLabel === "Borrow"
+      ? Math.max(baseApr - incentiveApr, 0)
+      : totalApr
   return (
-    <div className="group relative inline-flex items-center gap-1">
-      <span>{formatApr(row.incentiveApr)}</span>
-      {row.incentiveBreakdown?.length ? (
-        <div className="pointer-events-none absolute left-0 top-full z-20 mt-1 hidden w-44 border bg-popover p-2 text-xs shadow-md group-hover:block">
-          <div className="text-muted-foreground">Breakdown</div>
+    <div
+      className="relative inline-flex items-center gap-1"
+      onMouseEnter={hasIncentive ? () => setOpen(true) : undefined}
+      onMouseLeave={hasIncentive ? () => setOpen(false) : undefined}
+    >
+      <span>{formatApr(totalApr)}</span>
+      {hasIncentive ? (
+        <span className={cn("text-xs font-medium", incentiveClass)}>
+          {incentivePrefix}
+          {formatApr(incentiveApr)}
+        </span>
+      ) : null}
+      {hasIncentive ? (
+        <div
+          className={cn(
+            "pointer-events-none absolute left-0 top-full z-40 mt-2 w-56 rounded-md border bg-popover p-2 text-xs shadow-md",
+            open ? "block" : "hidden"
+          )}
+        >
+          <div className="text-muted-foreground">{hoverLabel} APR</div>
           <div className="mt-1 space-y-1">
-            {row.incentiveBreakdown.map((item) => (
-              <div key={`${row.protocol}-${row.asset}-${item.token}`}>
-                {item.token}: {formatApr(item.apr)}
-              </div>
-            ))}
+            <div>Base: {formatApr(baseApr)}</div>
+            <div className={incentiveClass}>
+              Incentives: {formatApr(incentiveApr)}
+            </div>
+            <div>{netLabel}: {formatApr(netValue)}</div>
           </div>
+          {breakdown?.length ? (
+            <div className="mt-2 border-t pt-2 space-y-1">
+              {breakdown.map((item) => (
+                <div key={`${row.protocol}-${row.asset}-${hoverLabel}-${item.token}`}>
+                  {item.token}: {formatApr(item.apr)}
+                </div>
+              ))}
+            </div>
+          ) : null}
         </div>
       ) : null}
     </div>
@@ -101,7 +149,7 @@ export function MarketTable({
 }: MarketTableProps) {
   return (
     <>
-      <div className="hidden overflow-hidden border md:block">
+      <div className="hidden border overflow-visible md:block">
         <table className="w-full border-collapse text-left text-xs">
           <thead className="bg-muted/50 text-muted-foreground">
             <tr>
@@ -139,14 +187,6 @@ export function MarketTable({
               </th>
               <th className="px-3 py-2">
                 <SortButton
-                  label="Incentive APR"
-                  active={sortKey === "incentiveApr"}
-                  direction={sortDirection}
-                  onClick={() => onSort("incentiveApr")}
-                />
-              </th>
-              <th className="px-3 py-2">
-                <SortButton
                   label="Utilization"
                   active={sortKey === "utilization"}
                   direction={sortDirection}
@@ -179,10 +219,25 @@ export function MarketTable({
                     <Badge variant="secondary">{row.asset}</Badge>
                   </td>
                   <td className="px-3 py-3">{row.protocol}</td>
-                  <td className="px-3 py-3">{formatApr(row.supplyApr)}</td>
-                  <td className="px-3 py-3">{formatApr(row.borrowApr)}</td>
                   <td className="px-3 py-3">
-                    <IncentiveCell row={row} />
+                    <AprCell
+                      totalApr={row.supplyApr}
+                      baseApr={row.supplyBaseApr}
+                      incentiveApr={row.supplyIncentiveApr}
+                      breakdown={row.supplyIncentiveBreakdown}
+                      hoverLabel="Supply"
+                      row={row}
+                    />
+                  </td>
+                  <td className="px-3 py-3">
+                    <AprCell
+                      totalApr={row.borrowApr}
+                      baseApr={row.borrowBaseApr}
+                      incentiveApr={row.borrowIncentiveApr}
+                      breakdown={row.borrowIncentiveBreakdown}
+                      hoverLabel="Borrow"
+                      row={row}
+                    />
                   </td>
                   <td className="px-3 py-3">
                     {formatUtilization(row.utilization)}
@@ -217,15 +272,25 @@ export function MarketTable({
               <CardContent className="grid gap-2">
                 <div className="flex items-center justify-between">
                   <span className="text-muted-foreground">Supply APR</span>
-                  <span>{formatApr(row.supplyApr)}</span>
+                  <AprCell
+                    totalApr={row.supplyApr}
+                    baseApr={row.supplyBaseApr}
+                    incentiveApr={row.supplyIncentiveApr}
+                    breakdown={row.supplyIncentiveBreakdown}
+                    hoverLabel="Supply"
+                    row={row}
+                  />
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-muted-foreground">Borrow APR</span>
-                  <span>{formatApr(row.borrowApr)}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-muted-foreground">Incentive APR</span>
-                  <IncentiveCell row={row} />
+                  <AprCell
+                    totalApr={row.borrowApr}
+                    baseApr={row.borrowBaseApr}
+                    incentiveApr={row.borrowIncentiveApr}
+                    breakdown={row.borrowIncentiveBreakdown}
+                    hoverLabel="Borrow"
+                    row={row}
+                  />
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-muted-foreground">Utilization</span>
