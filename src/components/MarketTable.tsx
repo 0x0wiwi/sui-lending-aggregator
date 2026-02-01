@@ -67,19 +67,20 @@ function AprCell({
     hoverLabel === "Borrow"
       ? Math.max(baseApr - incentiveApr, 0)
       : totalApr
+  const primaryValue = totalApr
+  const primaryClass =
+    hasIncentive
+      ? hoverLabel === "Borrow"
+        ? "text-rose-600 dark:text-rose-400"
+        : "text-emerald-600 dark:text-emerald-400"
+      : undefined
   return (
     <div
       className="relative inline-flex items-center gap-1"
       onMouseEnter={hasIncentive ? () => setOpen(true) : undefined}
       onMouseLeave={hasIncentive ? () => setOpen(false) : undefined}
     >
-      <span>{formatApr(totalApr)}</span>
-      {hasIncentive ? (
-        <span className={cn("text-xs font-medium", incentiveClass)}>
-          {incentivePrefix}
-          {formatApr(incentiveApr)}
-        </span>
-      ) : null}
+      <span className={primaryClass}>{formatApr(primaryValue)}</span>
       {hasIncentive ? (
         <div
           className={cn(
@@ -91,7 +92,8 @@ function AprCell({
           <div className="mt-1 space-y-1">
             <div>Base: {formatApr(baseApr)}</div>
             <div className={incentiveClass}>
-              Incentives: {formatApr(incentiveApr)}
+              Incentives: {incentivePrefix}
+              {formatApr(incentiveApr)}
             </div>
             <div>{netLabel}: {formatApr(netValue)}</div>
           </div>
