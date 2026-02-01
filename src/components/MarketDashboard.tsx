@@ -223,11 +223,11 @@ export function MarketDashboard() {
                       positions
                     )
                     return (
-                      <Card key={protocol} size="sm">
+                      <Card key={protocol} size="sm" className="overflow-visible">
                         <CardHeader className="py-3">
                           <CardTitle className="text-sm">{protocol}</CardTitle>
                         </CardHeader>
-                        <CardContent className="pt-0">
+                        <CardContent className="pt-0 overflow-visible">
                           <MarketTable
                             rows={rows}
                             positions={positions}
@@ -252,11 +252,11 @@ export function MarketDashboard() {
                       positions
                     )
                     return (
-                      <Card key={asset} size="sm">
+                      <Card key={asset} size="sm" className="overflow-visible">
                         <CardHeader className="py-3">
                           <CardTitle className="text-sm">{asset}</CardTitle>
                         </CardHeader>
-                        <CardContent className="pt-0">
+                        <CardContent className="pt-0 overflow-visible">
                           <MarketTable
                             rows={rows}
                             positions={positions}

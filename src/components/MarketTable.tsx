@@ -4,7 +4,7 @@ import { ChevronDownIcon, ChevronUpIcon } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import type { MarketRow } from "@/lib/market-data"
+import { assetTypeAddresses, type MarketRow } from "@/lib/market-data"
 import type { WalletPositions } from "@/lib/positions"
 import { cn } from "@/lib/utils"
 
@@ -112,6 +112,16 @@ function AprCell({
   )
 }
 
+async function copyAssetAddress(asset: MarketRow["asset"]) {
+  const address = assetTypeAddresses[asset]
+  if (!address) return
+  try {
+    await navigator.clipboard.writeText(address)
+  } catch (error) {
+    console.error("Copy asset address failed:", error)
+  }
+}
+
 function SortButton({
   label,
   active,
@@ -149,6 +159,28 @@ export function MarketTable({
   sortDirection,
   onSort,
 }: MarketTableProps) {
+  const [copiedAsset, setCopiedAsset] = React.useState<MarketRow["asset"] | null>(null)
+  const copyTimer = React.useRef<number | null>(null)
+
+  const handleCopy = React.useCallback(async (asset: MarketRow["asset"]) => {
+    await copyAssetAddress(asset)
+    setCopiedAsset(asset)
+    if (copyTimer.current) {
+      window.clearTimeout(copyTimer.current)
+    }
+    copyTimer.current = window.setTimeout(() => {
+      setCopiedAsset(null)
+    }, 1500)
+  }, [])
+
+  React.useEffect(() => {
+    return () => {
+      if (copyTimer.current) {
+        window.clearTimeout(copyTimer.current)
+      }
+    }
+  }, [])
+
   return (
     <>
       <div className="hidden border overflow-visible md:block">
@@ -218,7 +250,21 @@ export function MarketTable({
                   className="border-t"
                 >
                   <td className="px-3 py-3">
-                    <Badge variant="secondary">{row.asset}</Badge>
+                    <span className="relative inline-flex items-center">
+                      <button
+                        type="button"
+                        className="cursor-pointer"
+                        onClick={() => handleCopy(row.asset)}
+                        title="Copy asset address"
+                      >
+                        <Badge variant="secondary">{row.asset}</Badge>
+                      </button>
+                      {copiedAsset === row.asset ? (
+                        <span className="pointer-events-none absolute left-full ml-2 text-xs text-muted-foreground whitespace-nowrap">
+                          Copied
+                        </span>
+                      ) : null}
+                    </span>
                   </td>
                   <td className="px-3 py-3">{row.protocol}</td>
                   <td className="px-3 py-3">
@@ -265,7 +311,21 @@ export function MarketTable({
             <Card key={`${row.protocol}-${row.asset}`} size="sm">
               <CardHeader className="flex items-center justify-between">
                 <CardTitle className="flex items-center gap-2">
-                  <Badge variant="secondary">{row.asset}</Badge>
+                  <span className="relative inline-flex items-center">
+                    <button
+                      type="button"
+                      className="cursor-pointer"
+                      onClick={() => handleCopy(row.asset)}
+                      title="Copy asset address"
+                    >
+                      <Badge variant="secondary">{row.asset}</Badge>
+                    </button>
+                    {copiedAsset === row.asset ? (
+                      <span className="pointer-events-none absolute left-full ml-2 text-xs text-muted-foreground whitespace-nowrap">
+                        Copied
+                      </span>
+                    ) : null}
+                  </span>
                   <span className="text-xs text-muted-foreground">
                     {row.protocol}
                   </span>

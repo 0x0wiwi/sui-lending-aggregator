@@ -224,6 +224,12 @@ function buildNaviIncentives(
 
 async function fetchNavi(address?: string | null): Promise<MarketFetchResult> {
   const pools = await getPools({ env: "prod" })
+  const preferredCoinType: Record<AssetSymbol, string> = {
+    SUI: assetTypeAddresses.SUI,
+    USDC: assetTypeAddresses.USDC,
+    USDT: assetTypeAddresses.USDT,
+    XBTC: assetTypeAddresses.XBTC,
+  }
   const selectedPools = pools.reduce<Partial<Record<AssetSymbol, Pool>>>(
     (acc, pool) => {
       const token = pool.token as
@@ -239,7 +245,19 @@ async function fetchNavi(address?: string | null): Promise<MarketFetchResult> {
         acc[asset] = pool
         return acc
       }
-      if (pool.isSuiBridge && !existing.isSuiBridge) {
+      const preferred = preferredCoinType[asset]
+      const isPreferred =
+        token?.address === preferred || token?.coinType === preferred
+      const existingToken = existing.token as
+        | { address?: string; coinType?: string }
+        | undefined
+      const existingPreferred =
+        existingToken?.address === preferred || existingToken?.coinType === preferred
+      if (isPreferred && !existingPreferred) {
+        acc[asset] = pool
+        return acc
+      }
+      if (pool.isSuiBridge && !existing.isSuiBridge && !existingPreferred) {
         acc[asset] = pool
       }
       return acc
