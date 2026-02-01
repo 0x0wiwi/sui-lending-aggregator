@@ -76,50 +76,49 @@ export function MarketDashboard() {
     displayAddress
   )
 
-  const [filters, setFilters] = React.useState<FilterState>(defaultFilters)
-  const [sortKey, setSortKey] = React.useState<SortKey>("asset")
-  const [sortDirection, setSortDirection] = React.useState<SortDirection>("asc")
-  const [viewMode, setViewMode] = React.useState<ViewMode>("mixed")
-
-  React.useEffect(() => {
-    if (typeof window === "undefined") return
-    const storedFilters = window.localStorage.getItem(filterStorageKey)
-    if (storedFilters) {
-      try {
-        const parsed = JSON.parse(storedFilters) as FilterState
-        setFilters({
-          assets: Array.isArray(parsed.assets) ? parsed.assets : [],
-          protocols: Array.isArray(parsed.protocols) ? parsed.protocols : [],
-          onlyIncentive: Boolean(parsed.onlyIncentive),
-          onlyPosition: Boolean(parsed.onlyPosition),
-        })
-      } catch {
-        setFilters(defaultFilters)
+  const [filters, setFilters] = React.useState<FilterState>(() => {
+    if (typeof window === "undefined") return defaultFilters
+    const stored = window.localStorage.getItem(filterStorageKey)
+    if (!stored) return defaultFilters
+    try {
+      const parsed = JSON.parse(stored) as FilterState
+      return {
+        assets: Array.isArray(parsed.assets) ? parsed.assets : [],
+        protocols: Array.isArray(parsed.protocols) ? parsed.protocols : [],
+        onlyIncentive: Boolean(parsed.onlyIncentive),
+        onlyPosition: Boolean(parsed.onlyPosition),
       }
+    } catch {
+      return defaultFilters
     }
-    const storedView = window.localStorage.getItem(viewStorageKey)
-    if (storedView === "mixed" || storedView === "byAsset" || storedView === "byProtocol") {
-      setViewMode(storedView)
+  })
+  const [sortKey, setSortKey] = React.useState<SortKey>(() => {
+    if (typeof window === "undefined") return "asset"
+    const stored = window.localStorage.getItem(sortStorageKey)
+    if (!stored) return "asset"
+    try {
+      const parsed = JSON.parse(stored) as { key?: SortKey }
+      return parsed.key ?? "asset"
+    } catch {
+      return "asset"
     }
-    const storedSort = window.localStorage.getItem(sortStorageKey)
-    if (storedSort) {
-      try {
-        const parsed = JSON.parse(storedSort) as {
-          key?: SortKey
-          direction?: SortDirection
-        }
-        if (parsed.key) {
-          setSortKey(parsed.key)
-        }
-        if (parsed.direction) {
-          setSortDirection(parsed.direction)
-        }
-      } catch {
-        setSortKey("asset")
-        setSortDirection("asc")
-      }
+  })
+  const [sortDirection, setSortDirection] = React.useState<SortDirection>(() => {
+    if (typeof window === "undefined") return "asc"
+    const stored = window.localStorage.getItem(sortStorageKey)
+    if (!stored) return "asc"
+    try {
+      const parsed = JSON.parse(stored) as { direction?: SortDirection }
+      return parsed.direction ?? "asc"
+    } catch {
+      return "asc"
     }
-  }, [])
+  })
+  const [viewMode, setViewMode] = React.useState<ViewMode>(() => {
+    if (typeof window === "undefined") return "mixed"
+    const stored = window.localStorage.getItem(viewStorageKey)
+    return stored === "byAsset" || stored === "byProtocol" ? stored : "mixed"
+  })
 
   React.useEffect(() => {
     if (typeof window === "undefined") return
