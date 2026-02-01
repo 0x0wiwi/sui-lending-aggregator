@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { FiltersBar } from "@/components/FiltersBar"
 import { MarketTable, type SortDirection, type SortKey } from "@/components/MarketTable"
 import { useMarketData } from "@/hooks/use-market-data"
-import { type MarketRow } from "@/lib/market-data"
+import { supportedAssets, supportedProtocols, type MarketRow } from "@/lib/market-data"
 
 type FilterState = {
   assets: string[]
@@ -15,6 +15,8 @@ type FilterState = {
   onlyIncentive: boolean
   onlyPosition: boolean
 }
+
+type ViewMode = "mixed" | "byAsset" | "byProtocol"
 
 const defaultFilters: FilterState = {
   assets: [],
@@ -66,8 +68,9 @@ export function MarketDashboard() {
   )
 
   const [filters, setFilters] = React.useState<FilterState>(defaultFilters)
-  const [sortKey, setSortKey] = React.useState<SortKey>("supplyApr")
-  const [sortDirection, setSortDirection] = React.useState<SortDirection>("desc")
+  const [sortKey, setSortKey] = React.useState<SortKey>("asset")
+  const [sortDirection, setSortDirection] = React.useState<SortDirection>("asc")
+  const [viewMode, setViewMode] = React.useState<ViewMode>("mixed")
 
   const handleSort = (key: SortKey) => {
     if (key === sortKey) {
@@ -121,6 +124,12 @@ export function MarketDashboard() {
     })
 
   const sortedRows = sortRows(filteredRows, sortKey, sortDirection, positions)
+  const protocolGroups = supportedProtocols.filter((protocol) =>
+    filteredRows.some((row) => row.protocol === protocol)
+  )
+  const assetGroups = supportedAssets.filter((asset) =>
+    filteredRows.some((row) => row.asset === asset)
+  )
 
   return (
     <div className="grid gap-6">
@@ -145,7 +154,7 @@ export function MarketDashboard() {
           </div>
         </CardHeader>
         <CardContent className="grid gap-4 overflow-visible">
-          <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <FiltersBar
               selectedAssets={filters.assets}
               selectedProtocols={filters.protocols}
@@ -166,16 +175,102 @@ export function MarketDashboard() {
                 }))
               }
             />
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs text-muted-foreground">View</span>
+              <Button
+                variant={viewMode === "mixed" ? "secondary" : "outline"}
+                size="sm"
+                onClick={() => setViewMode("mixed")}
+              >
+                Mixed
+              </Button>
+              <Button
+                variant={viewMode === "byAsset" ? "secondary" : "outline"}
+                size="sm"
+                onClick={() => setViewMode("byAsset")}
+              >
+                By Asset
+              </Button>
+              <Button
+                variant={viewMode === "byProtocol" ? "secondary" : "outline"}
+                size="sm"
+                onClick={() => setViewMode("byProtocol")}
+              >
+                By Protocol
+              </Button>
+            </div>
           </div>
 
           {sortedRows.length ? (
-            <MarketTable
-              rows={sortedRows}
-              positions={positions}
-              sortKey={sortKey}
-              sortDirection={sortDirection}
-              onSort={handleSort}
-            />
+            <div className="grid gap-6">
+              {viewMode === "mixed" && (
+                <MarketTable
+                  rows={sortedRows}
+                  positions={positions}
+                  sortKey={sortKey}
+                  sortDirection={sortDirection}
+                  onSort={handleSort}
+                />
+              )}
+
+              {viewMode === "byProtocol" && (
+                <div className="grid gap-3">
+                  {protocolGroups.map((protocol) => {
+                    const rows = sortRows(
+                      filteredRows.filter((row) => row.protocol === protocol),
+                      sortKey,
+                      sortDirection,
+                      positions
+                    )
+                    return (
+                      <Card key={protocol} size="sm">
+                        <CardHeader className="py-3">
+                          <CardTitle className="text-sm">{protocol}</CardTitle>
+                        </CardHeader>
+                        <CardContent className="pt-0">
+                          <MarketTable
+                            rows={rows}
+                            positions={positions}
+                            sortKey={sortKey}
+                            sortDirection={sortDirection}
+                            onSort={handleSort}
+                          />
+                        </CardContent>
+                      </Card>
+                    )
+                  })}
+                </div>
+              )}
+
+              {viewMode === "byAsset" && (
+                <div className="grid gap-3">
+                  {assetGroups.map((asset) => {
+                    const rows = sortRows(
+                      filteredRows.filter((row) => row.asset === asset),
+                      sortKey,
+                      sortDirection,
+                      positions
+                    )
+                    return (
+                      <Card key={asset} size="sm">
+                        <CardHeader className="py-3">
+                          <CardTitle className="text-sm">{asset}</CardTitle>
+                        </CardHeader>
+                        <CardContent className="pt-0">
+                          <MarketTable
+                            rows={rows}
+                            positions={positions}
+                            sortKey={sortKey}
+                            sortDirection={sortDirection}
+                            onSort={handleSort}
+                          />
+                        </CardContent>
+                      </Card>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
           ) : (
             <div className="border border-dashed p-6 text-center text-xs text-muted-foreground">
               {filters.onlyPosition && !account?.address
