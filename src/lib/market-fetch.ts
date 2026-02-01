@@ -1,6 +1,7 @@
 import { ScallopIndexer, type MarketPool } from "@scallop-io/sui-scallop-sdk"
 import { getFullnodeUrl, SuiClient } from "@mysten/sui/client"
 import { getPools, getLendingState, type Pool } from "@naviprotocol/lending"
+import { AlphalendClient } from "@alphafi/alphalend-sdk"
 import {
   formatRewards,
   getDedupedAprRewards,
@@ -69,6 +70,7 @@ async function fetchScallop(address?: string | null): Promise<MarketFetchResult>
     SUI: assetTypeAddresses.SUI,
     USDC: assetTypeAddresses.USDC,
     USDT: assetTypeAddresses.USDT,
+    XBTC: assetTypeAddresses.XBTC,
   }
   const selectedPools = pools.reduce<Partial<Record<AssetSymbol, MarketPool>>>(
     (acc, pool) => {
@@ -335,6 +337,7 @@ function selectSuilendReserves<
     SUI: assetTypeAddresses.SUI,
     USDC: assetTypeAddresses.USDC,
     USDT: assetTypeAddresses.USDT,
+    XBTC: assetTypeAddresses.XBTC,
   }
   return reserves.reduce<Partial<Record<AssetSymbol, T>>>((acc, reserve) => {
     const asset = toAssetSymbolFromSource(
@@ -485,6 +488,98 @@ async function fetchSuilend(address?: string | null): Promise<MarketFetchResult>
   }
 }
 
+async function fetchAlphaLend(address?: string | null): Promise<MarketFetchResult> {
+  try {
+    const suiClient = new SuiClient({ url: getFullnodeUrl("mainnet") })
+    const alphalendClient = new AlphalendClient("mainnet", suiClient)
+    const markets = await alphalendClient.getAllMarkets()
+    const marketList = Array.isArray(markets) ? markets : []
+    const marketById = new Map(
+      marketList.map((market) => [String(market.marketId), market])
+    )
+
+    const rows = marketList
+      .map((market) => {
+        const asset = toAssetSymbolFromSource(null, market.coinType)
+        if (!asset) return null
+        const supplyBaseApr = toNumber(market.supplyApr?.interestApr)
+        const borrowBaseApr = toNumber(market.borrowApr?.interestApr)
+        const supplyRewards = (market.supplyApr?.rewards ?? []) as Array<{
+          coinType: string
+          rewardApr: unknown
+        }>
+        const borrowRewards = (market.borrowApr?.rewards ?? []) as Array<{
+          coinType: string
+          rewardApr: unknown
+        }>
+        const supplyBreakdown = supplyRewards
+          .map((reward) => ({
+            token: formatTokenSymbol(reward.coinType),
+            apr: toNumber(reward.rewardApr),
+          }))
+          .filter((reward) => reward.apr > 0)
+        const borrowBreakdown = borrowRewards
+          .map((reward) => ({
+            token: formatTokenSymbol(reward.coinType),
+            apr: toNumber(reward.rewardApr),
+          }))
+          .filter((reward) => reward.apr > 0)
+        const supplyIncentiveApr = sumBreakdown(supplyBreakdown)
+        const borrowIncentiveApr = sumBreakdown(borrowBreakdown)
+        const supplyApr = supplyBaseApr + supplyIncentiveApr
+        const borrowApr = Math.max(borrowBaseApr - borrowIncentiveApr, 0)
+        const row: MarketRow = {
+          asset,
+          protocol: "AlphaLend",
+          supplyApr,
+          borrowApr,
+          utilization: toNumber(market.utilizationRate) * 100,
+          supplyBaseApr,
+          borrowBaseApr,
+          supplyIncentiveApr,
+          borrowIncentiveApr,
+        }
+        if (supplyBreakdown.length) {
+          row.supplyIncentiveBreakdown = supplyBreakdown
+        }
+        if (borrowBreakdown.length) {
+          row.borrowIncentiveBreakdown = borrowBreakdown
+        }
+        return row
+      })
+      .filter((row): row is MarketRow => Boolean(row))
+
+    let positions: WalletPositions = {}
+    if (address) {
+      const portfolios = (await alphalendClient.getUserPortfolio(address)) as
+        | Array<{ suppliedAmounts?: Map<number, unknown> }>
+        | undefined
+      positions = (portfolios ?? []).reduce<WalletPositions>(
+        (acc, portfolio) => {
+          const suppliedAmounts = portfolio?.suppliedAmounts
+          if (!suppliedAmounts) return acc
+          for (const [marketId, amount] of suppliedAmounts.entries()) {
+            const market = marketById.get(String(marketId))
+            if (!market) continue
+            const asset = toAssetSymbolFromSource(null, market.coinType)
+            if (!asset) continue
+            const key = createPositionKey("AlphaLend", asset)
+            const numericAmount = toNumber(amount)
+            acc[key] = (acc[key] ?? 0) + numericAmount
+          }
+          return acc
+        },
+        {}
+      )
+    }
+
+    return { rows, positions }
+  } catch (error) {
+    console.error("AlphaLend fetch failed:", error)
+    return { rows: [], positions: {} }
+  }
+}
+
 function mergePositions(all: WalletPositions[]) {
   return all.reduce<WalletPositions>((acc, positions) => {
     Object.entries(positions).forEach(([key, value]) => {
@@ -503,6 +598,7 @@ export async function fetchMarketSnapshot(
     fetchScallop(address),
     fetchNavi(address),
     fetchSuilend(address),
+    fetchAlphaLend(address),
   ])
 
   const rows = results.flatMap((result) =>
