@@ -127,7 +127,7 @@ async function fetchScallop(address?: string | null): Promise<MarketFetchResult>
       const supplyBaseApr = pool.supplyApr * 100
       const borrowBaseApr = pool.borrowApr * 100
       const supplyApr = supplyBaseApr + supplyIncentiveApr
-      const borrowApr = borrowBaseApr
+      const borrowApr = Math.max(borrowBaseApr - borrowIncentiveApr, 0)
       const row: MarketRow = {
         asset,
         protocol: "Scallop",
@@ -255,8 +255,10 @@ async function fetchNavi(address?: string | null): Promise<MarketFetchResult> {
         token?.address ?? token?.coinType
       )
       if (!asset) return null
-      const supplyAprBase = toNumber(pool.currentSupplyRate) / 1e25
-      const borrowAprBase = toNumber(pool.currentBorrowRate) / 1e25
+      const supplyAprBase = toNumber(pool.supplyIncentiveApyInfo?.vaultApr)
+        || toNumber(pool.currentSupplyRate) / 1e25
+      const borrowAprBase = toNumber(pool.borrowIncentiveApyInfo?.vaultApr)
+        || toNumber(pool.currentBorrowRate) / 1e25
       const utilization =
         pool.totalSupplyAmount && pool.borrowedAmount
           ? (toNumber(pool.borrowedAmount) / toNumber(pool.totalSupplyAmount)) * 100
@@ -273,8 +275,12 @@ async function fetchNavi(address?: string | null): Promise<MarketFetchResult> {
       )
       const supplyIncentiveTotal = sumBreakdown(supplyBreakdown)
       const borrowIncentiveTotal = sumBreakdown(borrowBreakdown)
-      const supplyApr = supplyAprBase + supplyIncentiveTotal
-      const borrowApr = borrowAprBase
+      const supplyNetApr = toNumber(pool.supplyIncentiveApyInfo?.apy)
+        || supplyAprBase + supplyIncentiveTotal
+      const borrowNetApr = toNumber(pool.borrowIncentiveApyInfo?.apy)
+        || Math.max(borrowAprBase - borrowIncentiveTotal, 0)
+      const supplyApr = supplyNetApr
+      const borrowApr = borrowNetApr
       const row: MarketRow = {
         asset,
         protocol: "Navi",
@@ -423,7 +429,7 @@ async function fetchSuilend(address?: string | null): Promise<MarketFetchResult>
         const supplyIncentiveApr = sumBreakdown(supplyBreakdown)
         const borrowIncentiveApr = sumBreakdown(borrowBreakdown)
         const supplyApr = supplyBaseApr + supplyIncentiveApr
-        const borrowApr = borrowBaseApr
+        const borrowApr = Math.max(borrowBaseApr - borrowIncentiveApr, 0)
         const row: MarketRow = {
           asset,
           protocol: "Suilend",
