@@ -4,10 +4,16 @@ import { useCurrentAccount } from "@mysten/dapp-kit"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { FiltersBar } from "@/components/FiltersBar"
+import { MarketToolbar } from "@/components/MarketToolbar"
 import { MarketTable, type SortDirection, type SortKey } from "@/components/MarketTable"
+import { RewardSummaryCard } from "@/components/RewardSummaryCard"
+import { useClaimRewards } from "@/hooks/use-claim-rewards"
 import { useMarketData } from "@/hooks/use-market-data"
-import { supportedAssets, supportedProtocols, type MarketRow } from "@/lib/market-data"
+import {
+  supportedAssets,
+  supportedProtocols,
+  type MarketRow,
+} from "@/lib/market-data"
 
 type FilterState = {
   assets: string[]
@@ -72,6 +78,7 @@ export function MarketDashboard() {
     return value && value.startsWith("0x") ? value : null
   }, [])
   const displayAddress = previewAddress ?? account?.address
+  const showClaimActions = Boolean(account?.address) && !previewAddress
   const { rows, updatedAt, refresh, positions, rewardSummary, isLoading } = useMarketData(
     displayAddress
   )
@@ -204,64 +211,6 @@ export function MarketDashboard() {
   const summaryRows = supportedProtocols
     .map((protocol) => rewardSummary.find((item) => item.protocol === protocol))
     .filter((item): item is NonNullable<typeof item> => Boolean(item))
-  const hasSummaryData = summaryRows.some(
-    (item) => item.supplies.length > 0 || item.rewards.length > 0
-  )
-
-  const formatAmount = (value: number) =>
-    value.toLocaleString("en-US", {
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 12,
-    })
-  const formatRewardAmount = (value: number) =>
-    value.toLocaleString("en-US", {
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 12,
-    })
-
-  const renderAlignedNumber = (
-    value: number,
-    formatFn: (value: number) => string
-  ) => {
-    const formatted = formatFn(value)
-    const [whole, fraction] = formatted.split(".")
-    return (
-      <span className="inline-flex items-baseline tabular-nums">
-        <span className="min-w-[6ch] text-right">{whole}</span>
-        <span className="min-w-[1ch] text-left text-xs text-muted-foreground">
-          {fraction ? `.${fraction}` : ""}
-        </span>
-      </span>
-    )
-  }
-
-  const renderSupplyList = (supplies: { asset: string; amount: number }[]) => {
-    if (!supplies.length) return "—"
-    return (
-      <div className="grid gap-1">
-        {supplies.map((item) => (
-          <div key={item.asset} className="grid grid-cols-[5ch_1fr] items-baseline gap-3">
-            <span className="font-medium">{item.asset}</span>
-            <span>{renderAlignedNumber(item.amount, formatAmount)}</span>
-          </div>
-        ))}
-      </div>
-    )
-  }
-
-  const renderRewardList = (rewards: { token: string; amount: number }[]) => {
-    if (!rewards.length) return "—"
-    return (
-      <div className="grid gap-1">
-        {rewards.map((item) => (
-          <div key={item.token} className="grid grid-cols-[5ch_1fr] items-baseline gap-3">
-            <span className="font-medium">{item.token}</span>
-            <span>{renderAlignedNumber(item.amount, formatRewardAmount)}</span>
-          </div>
-        ))}
-      </div>
-    )
-  }
 
   const totalSupplies = summaryRows.reduce<Record<string, number>>(
     (acc, item) => {
@@ -287,6 +236,19 @@ export function MarketDashboard() {
     amount,
   }))
 
+  const {
+    claimError,
+    claimingProtocol,
+    handleClaimAll,
+    handleClaimProtocol,
+    hasAnyClaim,
+    isProtocolClaimSupported,
+  } = useClaimRewards({
+    summaryRows,
+    showClaimActions,
+    onRefresh: refresh,
+  })
+
   return (
     <div className="grid gap-6">
       <Card className="overflow-visible">
@@ -310,113 +272,42 @@ export function MarketDashboard() {
           </div>
         </CardHeader>
         <CardContent className="grid gap-4 overflow-visible">
-          <div className="rounded-lg border bg-muted/20 p-3 text-xs">
-            <div className="mb-2 font-semibold text-muted-foreground uppercase">
-              Reward Summary
-            </div>
-            {!displayAddress ? (
-              <div className="text-muted-foreground">
-                Connect a wallet to view rewards.
-              </div>
-            ) : hasSummaryData ? (
-              <div className="overflow-auto">
-                <table className="w-full border-collapse text-left">
-                  <thead className="text-muted-foreground">
-                    <tr className="border-b">
-                      <th className="px-2 py-1">Protocol</th>
-                      <th className="px-2 py-1">Supplied Assets</th>
-                      <th className="px-2 py-1">Rewards</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {summaryRows.map((item) => (
-                      <tr key={item.protocol} className="border-b last:border-b-0">
-                        <td className="px-2 py-1 font-medium">{item.protocol}</td>
-                        <td className="px-2 py-1 align-top">
-                          {renderSupplyList(item.supplies)}
-                        </td>
-                        <td className="px-2 py-1 align-top">
-                          {renderRewardList(item.rewards)}
-                        </td>
-                      </tr>
-                    ))}
-                    <tr className="border-t bg-muted/30">
-                      <td className="px-2 py-1 font-medium">Total</td>
-                      <td className="px-2 py-1 align-top">
-                        {renderSupplyList(totalSupplyList)}
-                      </td>
-                      <td className="px-2 py-1 align-top">
-                        {renderRewardList(totalRewardList)}
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-            ) : (
-              <div className="text-muted-foreground">No rewards detected.</div>
-            )}
-          </div>
-          <div className="flex flex-wrap items-center gap-3">
-            <FiltersBar
-              selectedAssets={filters.assets}
-              selectedProtocols={filters.protocols}
-              onlyIncentive={filters.onlyIncentive}
-              onlyPosition={filters.onlyPosition}
-              onToggleAsset={handleToggleAsset}
-              onToggleProtocol={handleToggleProtocol}
-              onToggleIncentive={() =>
-                setFilters((prev) => ({
-                  ...prev,
-                  onlyIncentive: !prev.onlyIncentive,
-                }))
-              }
-              onTogglePosition={() =>
-                setFilters((prev) => ({
-                  ...prev,
-                  onlyPosition: !prev.onlyPosition,
-                }))
-              }
-            />
-            <div className="flex flex-wrap items-center gap-2 md:mx-auto">
-              <span className="text-xs text-muted-foreground">View</span>
-              <Button
-                variant={viewMode === "mixed" ? "secondary" : "outline"}
-                size="sm"
-                onClick={() => setViewMode("mixed")}
-              >
-                Mixed
-              </Button>
-              <Button
-                variant={viewMode === "byAsset" ? "secondary" : "outline"}
-                size="sm"
-                onClick={() => setViewMode("byAsset")}
-              >
-                By Asset
-              </Button>
-              <Button
-                variant={viewMode === "byProtocol" ? "secondary" : "outline"}
-                size="sm"
-                onClick={() => setViewMode("byProtocol")}
-              >
-                By Protocol
-              </Button>
-            </div>
-            <div className="ml-auto">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleClearFilters}
-                disabled={
-                  !filters.assets.length
-                  && !filters.protocols.length
-                  && !filters.onlyIncentive
-                  && !filters.onlyPosition
-                }
-              >
-                Clear Filters
-              </Button>
-            </div>
-          </div>
+          <RewardSummaryCard
+            displayAddress={displayAddress}
+            summaryRows={summaryRows}
+            totalSupplyList={totalSupplyList}
+            totalRewardList={totalRewardList}
+            showClaimActions={showClaimActions}
+            claimError={claimError}
+            claimingProtocol={claimingProtocol}
+            hasAnyClaim={hasAnyClaim}
+            onClaimProtocol={handleClaimProtocol}
+            onClaimAll={handleClaimAll}
+            isProtocolClaimSupported={isProtocolClaimSupported}
+          />
+          <MarketToolbar
+            selectedAssets={filters.assets}
+            selectedProtocols={filters.protocols}
+            onlyIncentive={filters.onlyIncentive}
+            onlyPosition={filters.onlyPosition}
+            viewMode={viewMode}
+            onToggleAsset={handleToggleAsset}
+            onToggleProtocol={handleToggleProtocol}
+            onToggleIncentive={() =>
+              setFilters((prev) => ({
+                ...prev,
+                onlyIncentive: !prev.onlyIncentive,
+              }))
+            }
+            onTogglePosition={() =>
+              setFilters((prev) => ({
+                ...prev,
+                onlyPosition: !prev.onlyPosition,
+              }))
+            }
+            onChangeView={setViewMode}
+            onClearFilters={handleClearFilters}
+          />
 
           {sortedRows.length ? (
             <div className="grid gap-6">

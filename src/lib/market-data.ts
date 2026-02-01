@@ -1,3 +1,5 @@
+import type { Side } from "@suilend/sdk/lib/types"
+
 export type Protocol = "Scallop" | "Navi" | "Suilend" | "AlphaLend"
 export type AssetSymbol = "SUI" | "USDC" | "USDT" | "XBTC" | "DEEP" | "WAL"
 
@@ -20,6 +22,16 @@ export type RewardSummaryItem = {
   protocol: Protocol
   supplies: RewardSupply[]
   rewards: RewardTokenAmount[]
+  claimMeta?: {
+    suilend?: {
+      rewards: Array<{
+        reserveArrayIndex: bigint
+        rewardIndex: bigint
+        rewardCoinType: string
+        side: Side
+      }>
+    }
+  }
 }
 
 export type MarketRow = {
