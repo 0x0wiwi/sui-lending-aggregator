@@ -1,3 +1,4 @@
+import * as React from "react"
 import {
   useConnectWallet,
   useCurrentAccount,
@@ -20,6 +21,12 @@ import {
 export function Header() {
   const account = useCurrentAccount()
   const wallets = useWallets()
+  const previewAddress = React.useMemo(() => {
+    if (typeof window === "undefined") return null
+    const value = new URLSearchParams(window.location.search).get("address")
+    return value && value.startsWith("0x") ? value : null
+  }, [])
+  const displayAddress = previewAddress ?? account?.address
   const { mutate: connectWallet, isPending: isConnecting } =
     useConnectWallet()
   const { mutate: disconnectWallet, isPending: isDisconnecting } =
@@ -30,7 +37,7 @@ export function Header() {
         <span className="text-sm font-medium">Sui Lending Dashboard</span>
       </div>
       <div className="ml-auto flex items-center gap-2">
-        <WalletPanel />
+        <WalletPanel address={displayAddress} />
         {account?.address ? (
           <Button
             variant="outline"
@@ -40,7 +47,7 @@ export function Header() {
           >
             Disconnect
           </Button>
-        ) : (
+        ) : displayAddress ? null : (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" size="sm" disabled={isConnecting}>

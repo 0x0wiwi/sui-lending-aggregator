@@ -1,4 +1,8 @@
-import { ScallopIndexer, type MarketPool } from "@scallop-io/sui-scallop-sdk"
+import {
+  ScallopIndexer,
+  ScallopQuery,
+  type MarketPool,
+} from "@scallop-io/sui-scallop-sdk"
 import { getFullnodeUrl, SuiClient } from "@mysten/sui/client"
 import { getPools, getLendingState, type Pool } from "@naviprotocol/lending"
 import { AlphalendClient } from "@alphafi/alphalend-sdk"
@@ -7,6 +11,7 @@ import {
   getDedupedAprRewards,
   getFilteredRewards,
 } from "@suilend/sdk/lib/liquidityMining"
+import { Side } from "@suilend/sdk/lib/types"
 import {
   initializeObligations,
   initializeSuilend,
@@ -17,14 +22,24 @@ import { LENDING_MARKET_ID, LENDING_MARKET_TYPE, SuilendClient } from "@suilend/
 import {
   assetTypeAddresses,
   normalizeAssetSymbol,
+  supportedProtocols,
   type MarketRow,
   type AssetSymbol,
+  type RewardSummaryItem,
+  type RewardSupply,
 } from "@/lib/market-data"
 import { createPositionKey, type WalletPositions } from "@/lib/positions"
 
 type MarketFetchResult = {
   rows: MarketRow[]
   positions: WalletPositions
+  rewardSummary?: RewardSummaryItem
+}
+
+type MarketSnapshot = {
+  rows: MarketRow[]
+  positions: WalletPositions
+  rewardSummary: RewardSummaryItem[]
 }
 
 function toNumber(value: unknown) {
@@ -50,6 +65,24 @@ function formatTokenSymbol(coinType: string) {
 
 function sumBreakdown(items: { apr: number }[]) {
   return items.reduce((sum, item) => sum + item.apr, 0)
+}
+
+function buildSupplyList(
+  positions: WalletPositions,
+  protocol: RewardSummaryItem["protocol"]
+) {
+  return Object.entries(positions)
+    .filter(([key, amount]) => key.startsWith(`${protocol}-`) && amount > 0)
+    .map(([key, amount]) => {
+      const [, asset] = key.split("-") as [string, AssetSymbol]
+      return { asset, amount }
+    })
+}
+
+function normalizeRewardList(rewardMap: Map<string, number>) {
+  return Array.from(rewardMap.entries())
+    .map(([token, amount]) => ({ token, amount }))
+    .filter((reward) => reward.amount > 0)
 }
 
 async function fetchScallop(address?: string | null): Promise<MarketFetchResult> {
@@ -154,11 +187,59 @@ async function fetchScallop(address?: string | null): Promise<MarketFetchResult>
     .filter((row): row is MarketRow => Boolean(row))
 
   const positions: WalletPositions = {}
+  let rewardSummary: RewardSummaryItem | undefined
   if (address) {
-    return { rows, positions }
+    try {
+      const query = new ScallopQuery()
+      const portfolio = await query.getUserPortfolio({
+        walletAddress: address,
+      })
+      const supplies = (portfolio?.lendings ?? []).reduce<RewardSupply[]>(
+        (acc, lending) => {
+          const asset = toAssetSymbolFromSource(
+            lending.symbol,
+            lending.coinType
+          )
+          if (!asset) return acc
+          const existing = acc.find((item) => item.asset === asset)
+          if (existing) {
+            existing.amount += toNumber(lending.suppliedCoin)
+          } else {
+            acc.push({ asset, amount: toNumber(lending.suppliedCoin) })
+          }
+          return acc
+        },
+        []
+      )
+      const rewardTotals = new Map<string, number>()
+      const pending = portfolio?.pendingRewards
+      pending?.lendings?.forEach(
+        (reward: { symbol?: string; coinType?: string; pendingRewardInCoin?: number }) => {
+        const token = reward.symbol ?? formatTokenSymbol(reward.coinType ?? "")
+        rewardTotals.set(
+          token,
+          (rewardTotals.get(token) ?? 0) + toNumber(reward.pendingRewardInCoin)
+        )
+      })
+      pending?.borrowIncentives?.forEach(
+        (reward: { symbol?: string; coinType?: string; pendingRewardInCoin?: number }) => {
+        const token = reward.symbol ?? formatTokenSymbol(reward.coinType ?? "")
+        rewardTotals.set(
+          token,
+          (rewardTotals.get(token) ?? 0) + toNumber(reward.pendingRewardInCoin)
+        )
+      })
+      rewardSummary = {
+        protocol: "Scallop",
+        supplies,
+        rewards: normalizeRewardList(rewardTotals),
+      }
+    } catch (error) {
+      console.error("Scallop portfolio fetch failed:", error)
+    }
   }
 
-  return { rows, positions }
+  return { rows, positions, rewardSummary }
 }
 
 type ScallopBorrowIncentiveReward = {
@@ -479,6 +560,7 @@ async function fetchSuilend(address?: string | null): Promise<MarketFetchResult>
       .filter((row): row is MarketRow => Boolean(row))
 
     let positions: WalletPositions = {}
+    let rewardSummary: RewardSummaryItem | undefined
     if (address) {
       const obligationsResult = await initializeObligations(
         suiClient,
@@ -503,9 +585,53 @@ async function fetchSuilend(address?: string | null): Promise<MarketFetchResult>
         },
         {}
       )
+      const rewardMapWithClaims = formatRewards(
+        reserveMap,
+        coinMetadataMap,
+        rewardPriceMap,
+        obligationsResult.obligations
+      )
+      const rewardTotals = new Map<string, number>()
+      obligationsResult.obligations.forEach((obligation) => {
+        obligation.deposits.forEach((deposit) => {
+          const rewards = rewardMapWithClaims[deposit.reserve.coinType]?.[
+            Side.DEPOSIT
+          ]
+          rewards?.forEach((reward) => {
+            const claim = reward.obligationClaims?.[obligation.id]
+            const amount = claim ? toNumber(claim.claimableAmount) : 0
+            if (amount > 0) {
+              rewardTotals.set(
+                reward.stats.symbol,
+                (rewardTotals.get(reward.stats.symbol) ?? 0) + amount
+              )
+            }
+          })
+        })
+        obligation.borrows.forEach((borrow) => {
+          const rewards = rewardMapWithClaims[borrow.reserve.coinType]?.[
+            Side.BORROW
+          ]
+          rewards?.forEach((reward) => {
+            const claim = reward.obligationClaims?.[obligation.id]
+            const amount = claim ? toNumber(claim.claimableAmount) : 0
+            if (amount > 0) {
+              rewardTotals.set(
+                reward.stats.symbol,
+                (rewardTotals.get(reward.stats.symbol) ?? 0) + amount
+              )
+            }
+          })
+        })
+      })
+      rewardSummary = {
+        protocol: "Suilend",
+        supplies: buildSupplyList(positions, "Suilend"),
+        rewards: normalizeRewardList(rewardTotals),
+      }
     }
 
-    return { rows, positions }
+    return { rows, positions, rewardSummary }
   } catch (error) {
     console.error("Suilend fetch failed:", error)
     return { rows: [], positions: {} }
@@ -574,6 +700,7 @@ async function fetchAlphaLend(address?: string | null): Promise<MarketFetchResul
       .filter((row): row is MarketRow => Boolean(row))
 
     let positions: WalletPositions = {}
+    let rewardSummary: RewardSummaryItem | undefined
     if (address) {
       const portfolios = (await alphalendClient.getUserPortfolio(address)) as
         | Array<{ suppliedAmounts?: Map<number, unknown> }>
@@ -595,9 +722,26 @@ async function fetchAlphaLend(address?: string | null): Promise<MarketFetchResul
         },
         {}
       )
+      const rewardTotals = new Map<string, number>()
+      ;(portfolios ?? []).forEach((portfolio) => {
+        const rewards = (portfolio as { rewardsToClaim?: Array<{ coinType: string; rewardAmount: unknown }> })
+          .rewardsToClaim
+        rewards?.forEach((reward) => {
+          const token = formatTokenSymbol(reward.coinType)
+          const amount = toNumber(reward.rewardAmount)
+          if (amount > 0) {
+            rewardTotals.set(token, (rewardTotals.get(token) ?? 0) + amount)
+          }
+        })
+      })
+      rewardSummary = {
+        protocol: "AlphaLend",
+        supplies: buildSupplyList(positions, "AlphaLend"),
+        rewards: normalizeRewardList(rewardTotals),
+      }
     }
 
-    return { rows, positions }
+    return { rows, positions, rewardSummary }
   } catch (error) {
     console.error("AlphaLend fetch failed:", error)
     return { rows: [], positions: {} }
@@ -617,7 +761,7 @@ function mergePositions(all: WalletPositions[]) {
 
 export async function fetchMarketSnapshot(
   address?: string | null
-): Promise<MarketFetchResult> {
+): Promise<MarketSnapshot> {
   const results = await Promise.allSettled([
     fetchScallop(address),
     fetchNavi(address),
@@ -634,5 +778,29 @@ export async function fetchMarketSnapshot(
       .map((result) => result.value.positions)
   )
 
-  return { rows, positions }
+  const summaryMap = new Map<RewardSummaryItem["protocol"], RewardSummaryItem>()
+  supportedProtocols.forEach((protocol) => {
+    summaryMap.set(protocol, {
+      protocol,
+      supplies: buildSupplyList(positions, protocol),
+      rewards: [],
+    })
+  })
+  results.forEach((result) => {
+    if (result.status !== "fulfilled") return
+    const summary = result.value.rewardSummary
+    if (!summary) return
+    const existing = summaryMap.get(summary.protocol)
+    summaryMap.set(summary.protocol, {
+      protocol: summary.protocol,
+      supplies: summary.supplies.length ? summary.supplies : existing?.supplies ?? [],
+      rewards: summary.rewards,
+    })
+  })
+
+  return {
+    rows,
+    positions,
+    rewardSummary: Array.from(summaryMap.values()),
+  }
 }

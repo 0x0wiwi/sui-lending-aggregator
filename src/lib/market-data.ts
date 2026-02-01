@@ -6,6 +6,22 @@ export type IncentiveBreakdown = {
   apr: number
 }
 
+export type RewardTokenAmount = {
+  token: string
+  amount: number
+}
+
+export type RewardSupply = {
+  asset: AssetSymbol
+  amount: number
+}
+
+export type RewardSummaryItem = {
+  protocol: Protocol
+  supplies: RewardSupply[]
+  rewards: RewardTokenAmount[]
+}
+
 export type MarketRow = {
   asset: AssetSymbol
   protocol: Protocol
