@@ -71,6 +71,8 @@ async function fetchScallop(address?: string | null): Promise<MarketFetchResult>
     USDC: assetTypeAddresses.USDC,
     USDT: assetTypeAddresses.USDT,
     XBTC: assetTypeAddresses.XBTC,
+    DEEP: assetTypeAddresses.DEEP,
+    WAL: assetTypeAddresses.WAL,
   }
   const selectedPools = pools.reduce<Partial<Record<AssetSymbol, MarketPool>>>(
     (acc, pool) => {
@@ -229,6 +231,8 @@ async function fetchNavi(address?: string | null): Promise<MarketFetchResult> {
     USDC: assetTypeAddresses.USDC,
     USDT: assetTypeAddresses.USDT,
     XBTC: assetTypeAddresses.XBTC,
+    DEEP: assetTypeAddresses.DEEP,
+    WAL: assetTypeAddresses.WAL,
   }
   const selectedPools = pools.reduce<Partial<Record<AssetSymbol, Pool>>>(
     (acc, pool) => {
@@ -356,6 +360,8 @@ function selectSuilendReserves<
     USDC: assetTypeAddresses.USDC,
     USDT: assetTypeAddresses.USDT,
     XBTC: assetTypeAddresses.XBTC,
+    DEEP: assetTypeAddresses.DEEP,
+    WAL: assetTypeAddresses.WAL,
   }
   return reserves.reduce<Partial<Record<AssetSymbol, T>>>((acc, reserve) => {
     const asset = toAssetSymbolFromSource(
