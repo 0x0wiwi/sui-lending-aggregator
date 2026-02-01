@@ -144,18 +144,40 @@ export function MarketDashboard() {
   )
 
   const formatAmount = (value: number) =>
-    value.toLocaleString(undefined, {
-      minimumFractionDigits: 3,
-      maximumFractionDigits: 3,
+    value.toLocaleString("en-US", {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 12,
     })
+  const formatRewardAmount = (value: number) =>
+    value.toLocaleString("en-US", {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 12,
+    })
+
+  const renderAlignedNumber = (
+    value: number,
+    formatFn: (value: number) => string
+  ) => {
+    const formatted = formatFn(value)
+    const [whole, fraction] = formatted.split(".")
+    return (
+      <span className="inline-flex items-baseline tabular-nums">
+        <span className="min-w-[6ch] text-right">{whole}</span>
+        <span className="min-w-[1ch] text-left text-xs text-muted-foreground">
+          {fraction ? `.${fraction}` : ""}
+        </span>
+      </span>
+    )
+  }
 
   const renderSupplyList = (supplies: { asset: string; amount: number }[]) => {
     if (!supplies.length) return "—"
     return (
       <div className="grid gap-1">
         {supplies.map((item) => (
-          <div key={item.asset}>
-            {item.asset} {formatAmount(item.amount)}
+          <div key={item.asset} className="grid grid-cols-[5ch_1fr] items-baseline gap-3">
+            <span className="font-medium">{item.asset}</span>
+            <span>{renderAlignedNumber(item.amount, formatAmount)}</span>
           </div>
         ))}
       </div>
@@ -167,13 +189,38 @@ export function MarketDashboard() {
     return (
       <div className="grid gap-1">
         {rewards.map((item) => (
-          <div key={item.token}>
-            {item.token} {formatAmount(item.amount)}
+          <div key={item.token} className="grid grid-cols-[5ch_1fr] items-baseline gap-3">
+            <span className="font-medium">{item.token}</span>
+            <span>{renderAlignedNumber(item.amount, formatRewardAmount)}</span>
           </div>
         ))}
       </div>
     )
   }
+
+  const totalSupplies = summaryRows.reduce<Record<string, number>>(
+    (acc, item) => {
+      item.supplies.forEach((supply) => {
+        acc[supply.asset] = (acc[supply.asset] ?? 0) + supply.amount
+      })
+      return acc
+    },
+    {}
+  )
+  const totalRewards = summaryRows.reduce<Record<string, number>>((acc, item) => {
+    item.rewards.forEach((reward) => {
+      acc[reward.token] = (acc[reward.token] ?? 0) + reward.amount
+    })
+    return acc
+  }, {})
+  const totalSupplyList = Object.entries(totalSupplies).map(([asset, amount]) => ({
+    asset,
+    amount,
+  }))
+  const totalRewardList = Object.entries(totalRewards).map(([token, amount]) => ({
+    token,
+    amount,
+  }))
 
   return (
     <div className="grid gap-6">
@@ -228,6 +275,15 @@ export function MarketDashboard() {
                         </td>
                       </tr>
                     ))}
+                    <tr className="border-t bg-muted/30">
+                      <td className="px-2 py-1 font-medium">Total</td>
+                      <td className="px-2 py-1 align-top">
+                        {renderSupplyList(totalSupplyList)}
+                      </td>
+                      <td className="px-2 py-1 align-top">
+                        {renderRewardList(totalRewardList)}
+                      </td>
+                    </tr>
                   </tbody>
                 </table>
               </div>
