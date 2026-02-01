@@ -24,6 +24,9 @@ const defaultFilters: FilterState = {
   onlyIncentive: false,
   onlyPosition: false,
 }
+const filterStorageKey = "lending-market-filters"
+const viewStorageKey = "lending-market-view"
+const sortStorageKey = "lending-market-sort"
 
 function sortRows(
   rows: MarketRow[],
@@ -78,6 +81,64 @@ export function MarketDashboard() {
   const [sortDirection, setSortDirection] = React.useState<SortDirection>("asc")
   const [viewMode, setViewMode] = React.useState<ViewMode>("mixed")
 
+  React.useEffect(() => {
+    if (typeof window === "undefined") return
+    const storedFilters = window.localStorage.getItem(filterStorageKey)
+    if (storedFilters) {
+      try {
+        const parsed = JSON.parse(storedFilters) as FilterState
+        setFilters({
+          assets: Array.isArray(parsed.assets) ? parsed.assets : [],
+          protocols: Array.isArray(parsed.protocols) ? parsed.protocols : [],
+          onlyIncentive: Boolean(parsed.onlyIncentive),
+          onlyPosition: Boolean(parsed.onlyPosition),
+        })
+      } catch {
+        setFilters(defaultFilters)
+      }
+    }
+    const storedView = window.localStorage.getItem(viewStorageKey)
+    if (storedView === "mixed" || storedView === "byAsset" || storedView === "byProtocol") {
+      setViewMode(storedView)
+    }
+    const storedSort = window.localStorage.getItem(sortStorageKey)
+    if (storedSort) {
+      try {
+        const parsed = JSON.parse(storedSort) as {
+          key?: SortKey
+          direction?: SortDirection
+        }
+        if (parsed.key) {
+          setSortKey(parsed.key)
+        }
+        if (parsed.direction) {
+          setSortDirection(parsed.direction)
+        }
+      } catch {
+        setSortKey("asset")
+        setSortDirection("asc")
+      }
+    }
+  }, [])
+
+  React.useEffect(() => {
+    if (typeof window === "undefined") return
+    window.localStorage.setItem(filterStorageKey, JSON.stringify(filters))
+  }, [filters])
+
+  React.useEffect(() => {
+    if (typeof window === "undefined") return
+    window.localStorage.setItem(viewStorageKey, viewMode)
+  }, [viewMode])
+
+  React.useEffect(() => {
+    if (typeof window === "undefined") return
+    window.localStorage.setItem(
+      sortStorageKey,
+      JSON.stringify({ key: sortKey, direction: sortDirection })
+    )
+  }, [sortKey, sortDirection])
+
   const handleSort = (key: SortKey) => {
     if (key === sortKey) {
       setSortDirection((prev) => (prev === "asc" ? "desc" : "asc"))
@@ -109,6 +170,11 @@ export function MarketDashboard() {
           : [...prev.protocols, protocol],
       }
     })
+  }
+
+  const handleClearFilters = () => {
+    setFilters(defaultFilters)
+    setViewMode("mixed")
   }
 
   const filteredRows = rows
@@ -291,7 +357,7 @@ export function MarketDashboard() {
               <div className="text-muted-foreground">No rewards detected.</div>
             )}
           </div>
-          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <div className="flex flex-wrap items-center gap-3">
             <FiltersBar
               selectedAssets={filters.assets}
               selectedProtocols={filters.protocols}
@@ -312,7 +378,7 @@ export function MarketDashboard() {
                 }))
               }
             />
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2 md:mx-auto">
               <span className="text-xs text-muted-foreground">View</span>
               <Button
                 variant={viewMode === "mixed" ? "secondary" : "outline"}
@@ -334,6 +400,21 @@ export function MarketDashboard() {
                 onClick={() => setViewMode("byProtocol")}
               >
                 By Protocol
+              </Button>
+            </div>
+            <div className="ml-auto">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleClearFilters}
+                disabled={
+                  !filters.assets.length
+                  && !filters.protocols.length
+                  && !filters.onlyIncentive
+                  && !filters.onlyPosition
+                }
+              >
+                Clear Filters
               </Button>
             </div>
           </div>
