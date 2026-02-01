@@ -42,7 +42,6 @@ function getPositionAmount(
 
 function AprCell({
   primaryApr,
-  secondaryApr,
   baseApr,
   incentiveApr,
   breakdown,
@@ -50,7 +49,6 @@ function AprCell({
   row,
 }: {
   primaryApr: number
-  secondaryApr?: number | null
   baseApr: number
   incentiveApr: number
   breakdown?: MarketRow["supplyIncentiveBreakdown"]
@@ -83,11 +81,6 @@ function AprCell({
       onMouseLeave={hasIncentive ? () => setOpen(false) : undefined}
     >
       <span className={primaryClass}>{formatApr(primaryValue)}</span>
-      {Number.isFinite(secondaryApr) ? (
-        <span className="text-xs text-muted-foreground">
-          {formatApr(secondaryApr ?? 0)}
-        </span>
-      ) : null}
       {hasIncentive ? (
         <div
           className={cn(
@@ -231,7 +224,6 @@ export function MarketTable({
                   <td className="px-3 py-3">
                     <AprCell
                       primaryApr={row.supplyApr}
-                      secondaryApr={row.protocol === "Navi" ? row.supplyBaseApr : null}
                       baseApr={row.supplyBaseApr}
                       incentiveApr={row.supplyIncentiveApr}
                       breakdown={row.supplyIncentiveBreakdown}
@@ -242,7 +234,6 @@ export function MarketTable({
                   <td className="px-3 py-3">
                     <AprCell
                       primaryApr={row.borrowApr}
-                      secondaryApr={row.protocol === "Navi" ? row.borrowBaseApr : null}
                       baseApr={row.borrowBaseApr}
                       incentiveApr={row.borrowIncentiveApr}
                       breakdown={row.borrowIncentiveBreakdown}
@@ -285,7 +276,6 @@ export function MarketTable({
                   <span className="text-muted-foreground">Supply APR</span>
                   <AprCell
                     primaryApr={row.supplyApr}
-                    secondaryApr={row.protocol === "Navi" ? row.supplyBaseApr : null}
                     baseApr={row.supplyBaseApr}
                     incentiveApr={row.supplyIncentiveApr}
                     breakdown={row.supplyIncentiveBreakdown}
@@ -297,7 +287,6 @@ export function MarketTable({
                   <span className="text-muted-foreground">Borrow APR</span>
                   <AprCell
                     primaryApr={row.borrowApr}
-                    secondaryApr={row.protocol === "Navi" ? row.borrowBaseApr : null}
                     baseApr={row.borrowBaseApr}
                     incentiveApr={row.borrowIncentiveApr}
                     breakdown={row.borrowIncentiveBreakdown}
