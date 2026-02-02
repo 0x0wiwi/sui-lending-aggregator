@@ -24,6 +24,9 @@ type RewardSummaryCardProps = {
   onSwapTargetChange: (coinType: string) => void
   slippageLabel: string
   swapEstimateLabel: string | null
+  swapEnabled: boolean
+  onSwapEnabledChange: (enabled: boolean) => void
+  swapAvailable: boolean
 }
 
 function formatAmount(value: number) {
@@ -91,6 +94,9 @@ export function RewardSummaryCard({
   onSwapTargetChange,
   slippageLabel,
   swapEstimateLabel,
+  swapEnabled,
+  onSwapEnabledChange,
+  swapAvailable,
 }: RewardSummaryCardProps) {
   const hasSummaryData = summaryRows.some(
     (item) => item.supplies.length > 0 || item.rewards.length > 0
@@ -106,27 +112,48 @@ export function RewardSummaryCard({
           Reward Summary
         </div>
         <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
-          <span>Swap to</span>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm">
-                {selectedTarget}
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              {swapTargetOptions.map((option) => (
-                <DropdownMenuItem
-                  key={option.coinType}
-                  onClick={() => onSwapTargetChange(option.coinType)}
-                >
-                  {option.label}
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
-          <span>Slippage {slippageLabel}</span>
-          {swapEstimateLabel ? (
-            <span>Estimated receive {swapEstimateLabel}</span>
+          <div className="flex items-center gap-1">
+            <Button
+              variant={swapEnabled ? "outline" : "secondary"}
+              size="sm"
+              onClick={() => onSwapEnabledChange(false)}
+            >
+              Claim
+            </Button>
+            <Button
+              variant={swapEnabled ? "secondary" : "outline"}
+              size="sm"
+              disabled={!swapAvailable}
+              onClick={() => onSwapEnabledChange(true)}
+            >
+              Claim + Swap
+            </Button>
+          </div>
+          {swapEnabled && swapAvailable ? (
+            <>
+              <span>Swap to</span>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm">
+                    {selectedTarget}
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  {swapTargetOptions.map((option) => (
+                    <DropdownMenuItem
+                      key={option.coinType}
+                      onClick={() => onSwapTargetChange(option.coinType)}
+                    >
+                      {option.label}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+              <span>Slippage {slippageLabel}</span>
+              {swapEstimateLabel ? (
+                <span>Estimated receive {swapEstimateLabel}</span>
+              ) : null}
+            </>
           ) : null}
         </div>
       </div>
@@ -143,6 +170,7 @@ export function RewardSummaryCard({
                     <Button
                       variant="outline"
                       size="sm"
+                      className="w-full min-w-0"
                       onClick={() => onClaimProtocol(item.protocol)}
                       disabled={
                         claimingProtocol !== null
@@ -157,7 +185,9 @@ export function RewardSummaryCard({
                     >
                       {claimingProtocol === item.protocol
                         ? "Claiming..."
-                        : "Claim + Swap"}
+                        : swapEnabled
+                          ? "Claim + Swap"
+                          : "Claim"}
                     </Button>
                   )}
                 </div>
@@ -180,12 +210,15 @@ export function RewardSummaryCard({
                   <Button
                     variant="secondary"
                     size="sm"
+                    className="w-full min-w-0"
                     onClick={onClaimAll}
                     disabled={claimingProtocol !== null || !hasAnyClaim}
                   >
                     {claimingProtocol === "all"
                       ? "Claiming..."
-                      : "Claim + Swap All"}
+                      : swapEnabled
+                        ? "Claim + Swap All"
+                        : "Claim All"}
                   </Button>
                 )}
               </div>
@@ -214,7 +247,9 @@ export function RewardSummaryCard({
                   <th className="px-2 py-1">Protocol</th>
                   <th className="px-2 py-1">Supplied Assets</th>
                   <th className="px-2 py-1">Rewards</th>
-                  {showClaimActions && <th className="px-2 py-1">Action</th>}
+                  {showClaimActions && (
+                    <th className="px-2 py-1 text-right w-[140px]">Action</th>
+                  )}
                 </tr>
               </thead>
               <tbody>
@@ -228,10 +263,11 @@ export function RewardSummaryCard({
                       {renderRewardList(item.rewards)}
                     </td>
                     {showClaimActions && (
-                      <td className="px-2 py-1 align-top whitespace-nowrap">
+                      <td className="px-2 py-1 align-top whitespace-nowrap text-right w-[140px]">
                         <Button
                           variant="outline"
                           size="sm"
+                          className="w-full min-w-0"
                           onClick={() => onClaimProtocol(item.protocol)}
                           disabled={
                             claimingProtocol !== null
@@ -246,7 +282,9 @@ export function RewardSummaryCard({
                         >
                           {claimingProtocol === item.protocol
                             ? "Claiming..."
-                            : "Claim + Swap"}
+                            : swapEnabled
+                              ? "Claim + Swap"
+                              : "Claim"}
                         </Button>
                       </td>
                     )}
@@ -261,16 +299,19 @@ export function RewardSummaryCard({
                     {renderRewardList(totalRewardList)}
                   </td>
                   {showClaimActions && (
-                    <td className="px-2 py-1 align-top whitespace-nowrap">
+                    <td className="px-2 py-1 align-top whitespace-nowrap text-right w-[140px]">
                       <Button
                         variant="secondary"
                         size="sm"
+                        className="w-full min-w-0"
                         onClick={onClaimAll}
                         disabled={claimingProtocol !== null || !hasAnyClaim}
                       >
                         {claimingProtocol === "all"
                           ? "Claiming..."
-                          : "Claim + Swap All"}
+                          : swapEnabled
+                            ? "Claim + Swap All"
+                            : "Claim All"}
                       </Button>
                     </td>
                   )}

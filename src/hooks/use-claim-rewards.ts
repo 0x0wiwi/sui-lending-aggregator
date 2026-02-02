@@ -7,6 +7,7 @@ import {
 import { Transaction } from "@mysten/sui/transactions"
 import BN from "bn.js"
 import BigNumber from "bignumber.js"
+import { AlphalendClient, getUserPositionCapId } from "@alphafi/alphalend-sdk"
 import {
   LENDING_MARKET_ID,
   LENDING_MARKET_TYPE,
@@ -27,6 +28,7 @@ type UseClaimRewardsArgs = {
   swapTargetCoinType: string
   swapTargetDecimals: number | null
   swapTargetSymbol: string
+  swapEnabled: boolean
 }
 
 export function useClaimRewards({
@@ -36,6 +38,7 @@ export function useClaimRewards({
   swapTargetCoinType,
   swapTargetDecimals,
   swapTargetSymbol,
+  swapEnabled,
 }: UseClaimRewardsArgs) {
   const account = useCurrentAccount()
   const suiClient = useSuiClient()
@@ -58,12 +61,19 @@ export function useClaimRewards({
     () => findSummary("Suilend")?.claimMeta?.suilend?.swapInputs ?? [],
     [findSummary]
   )
+  const alphaRewards = React.useMemo(
+    () => findSummary("AlphaLend")?.rewards ?? [],
+    [findSummary]
+  )
   const hasSuilendClaim = suilendClaimRewards.length > 0
-  const hasAnyClaim = showClaimActions && hasSuilendClaim
+  const hasAlphaClaim = alphaRewards.length > 0
+  const hasAnyClaim =
+    showClaimActions && (hasSuilendClaim || (!swapEnabled && hasAlphaClaim))
 
   const isProtocolClaimSupported = React.useCallback(
-    (protocol: Protocol) => protocol === "Suilend",
-    []
+    (protocol: Protocol) =>
+      protocol === "Suilend" || (!swapEnabled && protocol === "AlphaLend"),
+    [swapEnabled]
   )
 
   const aggregatorClient = React.useMemo(() => {
@@ -96,6 +106,10 @@ export function useClaimRewards({
       return
     }
     if (!aggregatorClient || !account?.address) {
+      setSwapEstimateLabel(null)
+      return
+    }
+    if (!swapEnabled) {
       setSwapEstimateLabel(null)
       return
     }
@@ -154,6 +168,7 @@ export function useClaimRewards({
     findSummary,
     formatAtomicAmount,
     showClaimActions,
+    swapEnabled,
     suilendSwapInputs,
     swapTargetCoinType,
     swapTargetDecimals,
@@ -163,7 +178,6 @@ export function useClaimRewards({
   const buildSuilendClaimTransaction = React.useCallback(async () => {
       if (!account?.address) return null
       if (!hasSuilendClaim) return null
-      if (!aggregatorClient) return null
       const suilendClient = await SuilendClient.initialize(
         LENDING_MARKET_ID,
         LENDING_MARKET_TYPE,
@@ -183,6 +197,16 @@ export function useClaimRewards({
         throw new Error("Missing obligation owner cap.")
       }
       const tx = new Transaction()
+      if (!swapEnabled) {
+        suilendClient.claimRewardsAndSendToUser(
+          account.address,
+          obligationOwnerCapId,
+          suilendClaimRewards,
+          tx
+        )
+        return tx
+      }
+      if (!aggregatorClient) return null
       const { mergedCoinsMap } = suilendClient.claimRewards(
         account.address,
         obligationOwnerCapId,
@@ -246,9 +270,30 @@ export function useClaimRewards({
       suilendClaimRewards,
       suilendSwapInputs,
       suiClient,
+      swapEnabled,
       swapTargetCoinType,
     ]
   )
+
+  const buildAlphaLendClaimTransaction = React.useCallback(async () => {
+    if (!account?.address) return null
+    if (!hasAlphaClaim) return null
+    const positionCapId = await getUserPositionCapId(
+      suiClient,
+      "mainnet",
+      account.address
+    )
+    if (!positionCapId) {
+      throw new Error("Missing AlphaLend position cap.")
+    }
+    const alphalendClient = new AlphalendClient("mainnet", suiClient)
+    return alphalendClient.claimRewards({
+      address: account.address,
+      positionCapId,
+      claimAndDepositAlpha: false,
+      claimAndDepositAll: false,
+    })
+  }, [account?.address, hasAlphaClaim, suiClient])
 
   const handleClaimProtocol = React.useCallback(
     async (protocol: Protocol) => {
@@ -259,6 +304,8 @@ export function useClaimRewards({
         let transaction: Transaction | null = null
         if (protocol === "Suilend") {
           transaction = await buildSuilendClaimTransaction()
+        } else if (protocol === "AlphaLend" && !swapEnabled) {
+          transaction = await buildAlphaLendClaimTransaction()
         }
         if (!transaction) {
           throw new Error("Claim not available.")
@@ -274,9 +321,11 @@ export function useClaimRewards({
       }
     },
     [
+      buildAlphaLendClaimTransaction,
       buildSuilendClaimTransaction,
       onRefresh,
       showClaimActions,
+      swapEnabled,
       signAndExecuteTransaction,
     ]
   )
@@ -287,14 +336,31 @@ export function useClaimRewards({
     setClaimingProtocol("all")
     setClaimError(null)
     try {
-      let transaction: Transaction | null = null
-      if (hasSuilendClaim) {
-        transaction = await buildSuilendClaimTransaction()
+      if (swapEnabled) {
+        const transaction = hasSuilendClaim
+          ? await buildSuilendClaimTransaction()
+          : null
+        if (!transaction) {
+          throw new Error("Claim not available.")
+        }
+        await signAndExecuteTransaction({ transaction })
+      } else {
+        if (hasSuilendClaim) {
+          const suilendTx = await buildSuilendClaimTransaction()
+          if (suilendTx) {
+            await signAndExecuteTransaction({ transaction: suilendTx })
+          }
+        }
+        if (hasAlphaClaim) {
+          const alphaTx = await buildAlphaLendClaimTransaction()
+          if (alphaTx) {
+            await signAndExecuteTransaction({ transaction: alphaTx })
+          }
+        }
+        if (!hasSuilendClaim && !hasAlphaClaim) {
+          throw new Error("Claim not available.")
+        }
       }
-      if (!transaction) {
-        throw new Error("Claim not available.")
-      }
-      await signAndExecuteTransaction({ transaction })
       onRefresh()
     } catch (error) {
       const message =
@@ -304,11 +370,14 @@ export function useClaimRewards({
       setClaimingProtocol(null)
     }
   }, [
+    buildAlphaLendClaimTransaction,
     buildSuilendClaimTransaction,
+    hasAlphaClaim,
     hasAnyClaim,
     hasSuilendClaim,
     onRefresh,
     showClaimActions,
+    swapEnabled,
     signAndExecuteTransaction,
   ])
 
