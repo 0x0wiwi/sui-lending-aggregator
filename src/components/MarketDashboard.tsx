@@ -147,7 +147,11 @@ export function MarketDashboard() {
     () => swapOptions.map(({ label, coinType }) => ({ label, coinType })),
     []
   )
-  const decimalsMap = useCoinDecimals(swapOptions.map((option) => option.coinType))
+  const swapCoinTypes = React.useMemo(
+    () => swapOptions.map((option) => option.coinType),
+    []
+  )
+  const decimalsMap = useCoinDecimals(swapCoinTypes)
   const swapTargetDecimals = decimalsMap[swapTarget] ?? null
   const [viewMode, setViewMode] = React.useState<ViewMode>(() => {
     if (typeof window === "undefined") return "mixed"
