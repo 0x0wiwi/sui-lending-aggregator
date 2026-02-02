@@ -12,6 +12,7 @@
   "dependencies": {
     "@alphafi/alphalend-sdk": "^1.1.27",
     "@base-ui/react": "^1.1.0",
+    "@cetusprotocol/aggregator-sdk": "^1.4.4",
     "@fontsource-variable/inter": "^5.2.8",
     "@mysten/dapp-kit": "^0.20.0",
     "@mysten/sui": "^1.45.2",
@@ -34,6 +35,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",
+    "@types/bn.js": "^5.2.0",
     "@types/node": "^24.10.1",
     "@types/react": "^19.2.5",
     "@types/react-dom": "^19.2.3",

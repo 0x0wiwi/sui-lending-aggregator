@@ -8,8 +8,10 @@ import { MarketToolbar } from "@/components/MarketToolbar"
 import { MarketTable, type SortDirection, type SortKey } from "@/components/MarketTable"
 import { RewardSummaryCard } from "@/components/RewardSummaryCard"
 import { useClaimRewards } from "@/hooks/use-claim-rewards"
+import { useCoinDecimals } from "@/hooks/use-coin-decimals"
 import { useMarketData } from "@/hooks/use-market-data"
 import {
+  assetTypeAddresses,
   supportedAssets,
   supportedProtocols,
   type MarketRow,
@@ -33,6 +35,21 @@ const defaultFilters: FilterState = {
 const filterStorageKey = "lending-market-filters"
 const viewStorageKey = "lending-market-view"
 const sortStorageKey = "lending-market-sort"
+const swapOptions = [
+  {
+    label: "SUI",
+    coinType: assetTypeAddresses.SUI,
+  },
+  {
+    label: "USDC",
+    coinType: assetTypeAddresses.USDC,
+  },
+  {
+    label: "USDT",
+    coinType: assetTypeAddresses.USDT,
+  },
+]
+const swapSlippageLabel = "0.1%"
 
 function sortRows(
   rows: MarketRow[],
@@ -121,6 +138,17 @@ export function MarketDashboard() {
       return "asc"
     }
   })
+  const [swapTarget, setSwapTarget] = React.useState<string>(
+    assetTypeAddresses.USDC
+  )
+  const swapTargetLabel =
+    swapOptions.find((option) => option.coinType === swapTarget)?.label ?? "USDC"
+  const swapTargetOptions = React.useMemo(
+    () => swapOptions.map(({ label, coinType }) => ({ label, coinType })),
+    []
+  )
+  const decimalsMap = useCoinDecimals(swapOptions.map((option) => option.coinType))
+  const swapTargetDecimals = decimalsMap[swapTarget] ?? null
   const [viewMode, setViewMode] = React.useState<ViewMode>(() => {
     if (typeof window === "undefined") return "mixed"
     const stored = window.localStorage.getItem(viewStorageKey)
@@ -243,10 +271,14 @@ export function MarketDashboard() {
     handleClaimProtocol,
     hasAnyClaim,
     isProtocolClaimSupported,
+    swapEstimateLabel,
   } = useClaimRewards({
     summaryRows,
     showClaimActions,
     onRefresh: refresh,
+    swapTargetCoinType: swapTarget,
+    swapTargetDecimals,
+    swapTargetSymbol: swapTargetLabel,
   })
 
   return (
@@ -284,6 +316,11 @@ export function MarketDashboard() {
             onClaimProtocol={handleClaimProtocol}
             onClaimAll={handleClaimAll}
             isProtocolClaimSupported={isProtocolClaimSupported}
+            swapTargetCoinType={swapTarget}
+            swapTargetOptions={swapTargetOptions}
+            onSwapTargetChange={setSwapTarget}
+            slippageLabel={swapSlippageLabel}
+            swapEstimateLabel={swapEstimateLabel}
           />
           <MarketToolbar
             selectedAssets={filters.assets}

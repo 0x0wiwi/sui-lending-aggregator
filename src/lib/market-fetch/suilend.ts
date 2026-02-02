@@ -24,6 +24,7 @@ import {
 } from "@/lib/market-data"
 import { createPositionKey, type WalletPositions } from "@/lib/positions"
 import { type MarketFetchResult } from "./types"
+import BigNumber from "bignumber.js"
 import {
   buildSupplyList,
   sumBreakdown,
@@ -191,6 +192,7 @@ export async function fetchSuilend(
         obligationsResult.obligations
       )
       const rewardTotals = new Map<string, number>()
+      const rewardAtomicTotals = new Map<string, BigNumber>()
       const claimRewards: Array<{
         reserveArrayIndex: bigint
         rewardIndex: bigint
@@ -208,6 +210,16 @@ export async function fetchSuilend(
               rewardTotals.set(
                 reward.stats.symbol,
                 (rewardTotals.get(reward.stats.symbol) ?? 0) + amount
+              )
+              const decimals = reward.stats.mintDecimals ?? 0
+              const atomic = claim.claimableAmount
+                .multipliedBy(new BigNumber(10).pow(decimals))
+                .integerValue(BigNumber.ROUND_FLOOR)
+              rewardAtomicTotals.set(
+                reward.stats.rewardCoinType,
+                (rewardAtomicTotals.get(reward.stats.rewardCoinType) ?? new BigNumber(0)).plus(
+                  atomic
+                )
               )
               const key = `${String(claim.reserveArrayIndex)}-${reward.stats.rewardIndex}-${reward.stats.rewardCoinType}-${reward.stats.side}`
               if (!claimKeys.has(key)) {
@@ -231,6 +243,16 @@ export async function fetchSuilend(
               rewardTotals.set(
                 reward.stats.symbol,
                 (rewardTotals.get(reward.stats.symbol) ?? 0) + amount
+              )
+              const decimals = reward.stats.mintDecimals ?? 0
+              const atomic = claim.claimableAmount
+                .multipliedBy(new BigNumber(10).pow(decimals))
+                .integerValue(BigNumber.ROUND_FLOOR)
+              rewardAtomicTotals.set(
+                reward.stats.rewardCoinType,
+                (rewardAtomicTotals.get(reward.stats.rewardCoinType) ?? new BigNumber(0)).plus(
+                  atomic
+                )
               )
               const key = `${String(claim.reserveArrayIndex)}-${reward.stats.rewardIndex}-${reward.stats.rewardCoinType}-${reward.stats.side}`
               if (!claimKeys.has(key)) {
@@ -256,6 +278,12 @@ export async function fetchSuilend(
           ? {
               suilend: {
                 rewards: claimRewards,
+                swapInputs: Array.from(rewardAtomicTotals.entries())
+                  .map(([coinType, amount]) => ({
+                    coinType,
+                    amountAtomic: amount.toFixed(0),
+                  }))
+                  .filter((input) => input.amountAtomic !== "0"),
               },
             }
           : undefined,
