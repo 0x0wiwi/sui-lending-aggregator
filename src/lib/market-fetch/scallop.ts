@@ -8,7 +8,7 @@ import {
   type RewardSupply,
 } from "@/lib/market-data"
 import { type WalletPositions } from "@/lib/positions"
-import { type MarketFetchResult } from "./types"
+import { type MarketFetchResult, type MarketOnlyResult, type UserOnlyResult } from "./types"
 import {
   formatTokenSymbol,
   sumBreakdown,
@@ -75,16 +75,14 @@ async function fetchScallopBorrowIncentivePools(): Promise<
   }
 }
 
-export async function fetchScallop(
-  address?: string | null
-): Promise<MarketFetchResult> {
+export async function fetchScallopMarket(): Promise<MarketOnlyResult> {
   const indexer = new ScallopIndexer()
   let market
   try {
     market = await indexer.getMarket()
   } catch (error) {
     console.error("Scallop market fetch failed:", error)
-    return { rows: [], positions: {} }
+    return { rows: [] }
   }
   const spoolsResult = await Promise.allSettled([indexer.getSpools()])
   const spools =
@@ -177,7 +175,12 @@ export async function fetchScallop(
       return row
     })
     .filter((row): row is MarketRow => Boolean(row))
+  return { rows }
+}
 
+export async function fetchScallopUser(
+  address?: string | null
+): Promise<UserOnlyResult> {
   const positions: WalletPositions = {}
   let rewardSummary: RewardSummaryItem | undefined
   if (address) {
@@ -236,5 +239,19 @@ export async function fetchScallop(
     }
   }
 
-  return { rows, positions, rewardSummary }
+  return { positions, rewardSummary }
+}
+
+export async function fetchScallop(
+  address?: string | null
+): Promise<MarketFetchResult> {
+  const [market, user] = await Promise.all([
+    fetchScallopMarket(),
+    fetchScallopUser(address),
+  ])
+  return {
+    rows: market.rows,
+    positions: user.positions,
+    rewardSummary: user.rewardSummary,
+  }
 }

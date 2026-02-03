@@ -6,7 +6,7 @@ import {
   type RewardSummaryItem,
 } from "@/lib/market-data"
 import { createPositionKey, type WalletPositions } from "@/lib/positions"
-import { type MarketFetchResult } from "./types"
+import { type MarketFetchResult, type MarketOnlyResult, type UserOnlyResult } from "./types"
 import {
   buildSupplyList,
   formatTokenSymbol,
@@ -15,18 +15,12 @@ import {
   toNumber,
 } from "./utils"
 
-export async function fetchAlphaLend(
-  address?: string | null
-): Promise<MarketFetchResult> {
+export async function fetchAlphaLendMarket(): Promise<MarketOnlyResult> {
   try {
     const suiClient = new SuiClient({ url: getFullnodeUrl("mainnet") })
     const alphalendClient = new AlphalendClient("mainnet", suiClient)
     const markets = await alphalendClient.getAllMarkets()
     const marketList = Array.isArray(markets) ? markets : []
-    const marketById = new Map(
-      marketList.map((market) => [String(market.marketId), market])
-    )
-
     const rows = marketList
       .map((market) => {
         const asset = toAssetSymbolFromSource(null, market.coinType)
@@ -78,60 +72,88 @@ export async function fetchAlphaLend(
         return row
       })
       .filter((row): row is MarketRow => Boolean(row))
-
-    let positions: WalletPositions = {}
-    let rewardSummary: RewardSummaryItem | undefined
-    if (address) {
-      const portfolios = (await alphalendClient.getUserPortfolio(address)) as
-        | Array<{
-            suppliedAmounts?: Map<number, unknown>
-            rewardsToClaim?: Array<{ coinType: string; rewardAmount: unknown }>
-          }>
-        | undefined
-      positions = (portfolios ?? []).reduce<WalletPositions>((acc, portfolio) => {
-        const suppliedAmounts = portfolio?.suppliedAmounts
-        if (!suppliedAmounts) return acc
-        for (const [marketId, amount] of suppliedAmounts.entries()) {
-          const market = marketById.get(String(marketId))
-          if (!market) continue
-          const asset = toAssetSymbolFromSource(null, market.coinType)
-          if (!asset) continue
-          const key = createPositionKey("AlphaLend", asset)
-          acc[key] = (acc[key] ?? 0) + toNumber(amount)
-        }
-        return acc
-      }, {})
-      const rewardTotals = new Map<string, { token: string; amount: number }>()
-      ;(portfolios ?? []).forEach((portfolio) => {
-        const rewards = portfolio?.rewardsToClaim
-        rewards?.forEach((reward) => {
-          const token = formatTokenSymbol(reward.coinType)
-          const amount = toNumber(reward.rewardAmount)
-          if (amount > 0) {
-            const existing = rewardTotals.get(reward.coinType)
-            rewardTotals.set(reward.coinType, {
-              token,
-              amount: (existing?.amount ?? 0) + amount,
-            })
-          }
-        })
-      })
-      rewardSummary = {
-        protocol: "AlphaLend",
-        supplies: buildSupplyList(positions, "AlphaLend"),
-        rewards: Array.from(rewardTotals.entries())
-          .map(([coinType, reward]) => ({
-            token: reward.token,
-            amount: reward.amount,
-            coinType,
-          }))
-          .filter((reward) => reward.amount > 0),
-      }
-    }
-
-    return { rows, positions, rewardSummary }
+    return { rows }
   } catch (error) {
-    console.error("AlphaLend fetch failed:", error)
-    return { rows: [], positions: {} }
+    console.error("AlphaLend market fetch failed:", error)
+    return { rows: [] }
+  }
+}
+
+export async function fetchAlphaLendUser(
+  address?: string | null
+): Promise<UserOnlyResult> {
+  let positions: WalletPositions = {}
+  let rewardSummary: RewardSummaryItem | undefined
+  if (!address) return { positions, rewardSummary }
+  try {
+    const suiClient = new SuiClient({ url: getFullnodeUrl("mainnet") })
+    const alphalendClient = new AlphalendClient("mainnet", suiClient)
+    const markets = await alphalendClient.getAllMarkets()
+    const marketList = Array.isArray(markets) ? markets : []
+    const marketById = new Map(
+      marketList.map((market) => [String(market.marketId), market])
+    )
+    const portfolios = (await alphalendClient.getUserPortfolio(address)) as
+      | Array<{
+          suppliedAmounts?: Map<number, unknown>
+          rewardsToClaim?: Array<{ coinType: string; rewardAmount: unknown }>
+        }>
+      | undefined
+    positions = (portfolios ?? []).reduce<WalletPositions>((acc, portfolio) => {
+      const suppliedAmounts = portfolio?.suppliedAmounts
+      if (!suppliedAmounts) return acc
+      for (const [marketId, amount] of suppliedAmounts.entries()) {
+        const market = marketById.get(String(marketId))
+        if (!market) continue
+        const asset = toAssetSymbolFromSource(null, market.coinType)
+        if (!asset) continue
+        const key = createPositionKey("AlphaLend", asset)
+        acc[key] = (acc[key] ?? 0) + toNumber(amount)
+      }
+      return acc
+    }, {})
+    const rewardTotals = new Map<string, { token: string; amount: number }>()
+    ;(portfolios ?? []).forEach((portfolio) => {
+      const rewards = portfolio?.rewardsToClaim
+      rewards?.forEach((reward) => {
+        const token = formatTokenSymbol(reward.coinType)
+        const amount = toNumber(reward.rewardAmount)
+        if (amount > 0) {
+          const existing = rewardTotals.get(reward.coinType)
+          rewardTotals.set(reward.coinType, {
+            token,
+            amount: (existing?.amount ?? 0) + amount,
+          })
+        }
+      })
+    })
+    rewardSummary = {
+      protocol: "AlphaLend",
+      supplies: buildSupplyList(positions, "AlphaLend"),
+      rewards: Array.from(rewardTotals.entries())
+        .map(([coinType, reward]) => ({
+          token: reward.token,
+          amount: reward.amount,
+          coinType,
+        }))
+        .filter((reward) => reward.amount > 0),
+    }
+  } catch (error) {
+    console.error("AlphaLend user fetch failed:", error)
+  }
+  return { positions, rewardSummary }
+}
+
+export async function fetchAlphaLend(
+  address?: string | null
+): Promise<MarketFetchResult> {
+  const [market, user] = await Promise.all([
+    fetchAlphaLendMarket(),
+    fetchAlphaLendUser(address),
+  ])
+  return {
+    rows: market.rows,
+    positions: user.positions,
+    rewardSummary: user.rewardSummary,
   }
 }

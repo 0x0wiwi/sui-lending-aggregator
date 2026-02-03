@@ -23,7 +23,7 @@ import {
   type RewardSummaryItem,
 } from "@/lib/market-data"
 import { createPositionKey, type WalletPositions } from "@/lib/positions"
-import { type MarketFetchResult } from "./types"
+import { type MarketFetchResult, type MarketOnlyResult, type UserOnlyResult } from "./types"
 import BigNumber from "bignumber.js"
 import {
   buildSupplyList,
@@ -78,9 +78,7 @@ function selectSuilendReserves<
   }, {})
 }
 
-export async function fetchSuilend(
-  address?: string | null
-): Promise<MarketFetchResult> {
+export async function fetchSuilendMarket(): Promise<MarketOnlyResult> {
   try {
     const suiClient = new SuiClient({ url: getFullnodeUrl("mainnet") })
     const suilendClient = await SuilendClient.initialize(
@@ -88,7 +86,7 @@ export async function fetchSuilend(
       LENDING_MARKET_TYPE,
       suiClient
     )
-    const { reserveMap, coinMetadataMap, refreshedRawReserves, activeRewardCoinTypes } =
+    const { reserveMap, coinMetadataMap, activeRewardCoinTypes } =
       await initializeSuilend(suiClient, suilendClient)
     const { rewardPriceMap } = await initializeSuilendRewards(
       reserveMap,
@@ -158,147 +156,176 @@ export async function fetchSuilend(
         return row
       })
       .filter((row): row is MarketRow => Boolean(row))
+    return { rows }
+  } catch (error) {
+    console.error("Suilend market fetch failed:", error)
+    return { rows: [] }
+  }
+}
 
-    let positions: WalletPositions = {}
-    let rewardSummary: RewardSummaryItem | undefined
-    if (address) {
-      const obligationsResult = await initializeObligations(
-        suiClient,
-        suilendClient,
-        refreshedRawReserves,
-        reserveMap,
-        address
-      )
-      positions = obligationsResult.obligations.reduce<WalletPositions>(
-        (acc, obligation) => {
-          obligation.deposits.forEach((deposit) => {
-            const asset = toAssetSymbolFromSource(
-              deposit.reserve.token.symbol,
-              deposit.reserve.coinType ?? null
+export async function fetchSuilendUser(
+  address?: string | null
+): Promise<UserOnlyResult> {
+  const positions: WalletPositions = {}
+  let rewardSummary: RewardSummaryItem | undefined
+  if (!address) return { positions, rewardSummary }
+  try {
+    const suiClient = new SuiClient({ url: getFullnodeUrl("mainnet") })
+    const suilendClient = await SuilendClient.initialize(
+      LENDING_MARKET_ID,
+      LENDING_MARKET_TYPE,
+      suiClient
+    )
+    const { reserveMap, coinMetadataMap, refreshedRawReserves, activeRewardCoinTypes } =
+      await initializeSuilend(suiClient, suilendClient)
+    const { rewardPriceMap } = await initializeSuilendRewards(
+      reserveMap,
+      activeRewardCoinTypes
+    )
+    const obligationsResult = await initializeObligations(
+      suiClient,
+      suilendClient,
+      refreshedRawReserves,
+      reserveMap,
+      address
+    )
+    obligationsResult.obligations.forEach((obligation) => {
+      obligation.deposits.forEach((deposit) => {
+        const asset = toAssetSymbolFromSource(
+          deposit.reserve.token.symbol,
+          deposit.reserve.coinType ?? null
+        )
+        if (!asset) return
+        const key = createPositionKey("Suilend", asset)
+        const amount = toNumber(deposit.depositedAmount)
+        positions[key] = (positions[key] ?? 0) + amount
+      })
+    })
+    const rewardMapWithClaims = formatRewards(
+      reserveMap,
+      coinMetadataMap,
+      rewardPriceMap,
+      obligationsResult.obligations
+    )
+    const rewardTotals = new Map<string, { token: string; amount: number }>()
+    const rewardAtomicTotals = new Map<string, BigNumber>()
+    const claimRewards: Array<{
+      reserveArrayIndex: bigint
+      rewardIndex: bigint
+      rewardCoinType: string
+      side: Side
+    }> = []
+    const claimKeys = new Set<string>()
+    obligationsResult.obligations.forEach((obligation) => {
+      obligation.deposits.forEach((deposit) => {
+        const rewards = rewardMapWithClaims[deposit.reserve.coinType]?.[Side.DEPOSIT]
+        rewards?.forEach((reward) => {
+          const claim = reward.obligationClaims?.[obligation.id]
+          const amount = claim ? toNumber(claim.claimableAmount) : 0
+          if (amount > 0) {
+            const existing = rewardTotals.get(reward.stats.rewardCoinType)
+            rewardTotals.set(reward.stats.rewardCoinType, {
+              token: reward.stats.symbol,
+              amount: (existing?.amount ?? 0) + amount,
+            })
+            const decimals = reward.stats.mintDecimals ?? 0
+            const atomic = claim.claimableAmount
+              .multipliedBy(new BigNumber(10).pow(decimals))
+              .integerValue(BigNumber.ROUND_FLOOR)
+            rewardAtomicTotals.set(
+              reward.stats.rewardCoinType,
+              (rewardAtomicTotals.get(reward.stats.rewardCoinType) ?? new BigNumber(0)).plus(
+                atomic
+              )
             )
-            if (!asset) return
-            const key = createPositionKey("Suilend", asset)
-            const amount = toNumber(deposit.depositedAmount)
-            acc[key] = (acc[key] ?? 0) + amount
-          })
-          return acc
-        },
-        {}
-      )
-      const rewardMapWithClaims = formatRewards(
-        reserveMap,
-        coinMetadataMap,
-        rewardPriceMap,
-        obligationsResult.obligations
-      )
-      const rewardTotals = new Map<string, { token: string; amount: number }>()
-      const rewardAtomicTotals = new Map<string, BigNumber>()
-      const claimRewards: Array<{
-        reserveArrayIndex: bigint
-        rewardIndex: bigint
-        rewardCoinType: string
-        side: Side
-      }> = []
-      const claimKeys = new Set<string>()
-      obligationsResult.obligations.forEach((obligation) => {
-        obligation.deposits.forEach((deposit) => {
-          const rewards = rewardMapWithClaims[deposit.reserve.coinType]?.[Side.DEPOSIT]
-          rewards?.forEach((reward) => {
-            const claim = reward.obligationClaims?.[obligation.id]
-            const amount = claim ? toNumber(claim.claimableAmount) : 0
-            if (amount > 0) {
-              const existing = rewardTotals.get(reward.stats.rewardCoinType)
-              rewardTotals.set(reward.stats.rewardCoinType, {
-                token: reward.stats.symbol,
-                amount: (existing?.amount ?? 0) + amount,
+            const key = `${String(claim.reserveArrayIndex)}-${reward.stats.rewardIndex}-${reward.stats.rewardCoinType}-${reward.stats.side}`
+            if (!claimKeys.has(key)) {
+              claimKeys.add(key)
+              claimRewards.push({
+                reserveArrayIndex: claim.reserveArrayIndex,
+                rewardIndex: BigInt(reward.stats.rewardIndex),
+                rewardCoinType: reward.stats.rewardCoinType,
+                side: reward.stats.side,
               })
-              const decimals = reward.stats.mintDecimals ?? 0
-              const atomic = claim.claimableAmount
-                .multipliedBy(new BigNumber(10).pow(decimals))
-                .integerValue(BigNumber.ROUND_FLOOR)
-              rewardAtomicTotals.set(
-                reward.stats.rewardCoinType,
-                (rewardAtomicTotals.get(reward.stats.rewardCoinType) ?? new BigNumber(0)).plus(
-                  atomic
-                )
-              )
-              const key = `${String(claim.reserveArrayIndex)}-${reward.stats.rewardIndex}-${reward.stats.rewardCoinType}-${reward.stats.side}`
-              if (!claimKeys.has(key)) {
-                claimKeys.add(key)
-                claimRewards.push({
-                  reserveArrayIndex: claim.reserveArrayIndex,
-                  rewardIndex: BigInt(reward.stats.rewardIndex),
-                  rewardCoinType: reward.stats.rewardCoinType,
-                  side: reward.stats.side,
-                })
-              }
             }
-          })
-        })
-        obligation.borrows.forEach((borrow) => {
-          const rewards = rewardMapWithClaims[borrow.reserve.coinType]?.[Side.BORROW]
-          rewards?.forEach((reward) => {
-            const claim = reward.obligationClaims?.[obligation.id]
-            const amount = claim ? toNumber(claim.claimableAmount) : 0
-            if (amount > 0) {
-              const existing = rewardTotals.get(reward.stats.rewardCoinType)
-              rewardTotals.set(reward.stats.rewardCoinType, {
-                token: reward.stats.symbol,
-                amount: (existing?.amount ?? 0) + amount,
-              })
-              const decimals = reward.stats.mintDecimals ?? 0
-              const atomic = claim.claimableAmount
-                .multipliedBy(new BigNumber(10).pow(decimals))
-                .integerValue(BigNumber.ROUND_FLOOR)
-              rewardAtomicTotals.set(
-                reward.stats.rewardCoinType,
-                (rewardAtomicTotals.get(reward.stats.rewardCoinType) ?? new BigNumber(0)).plus(
-                  atomic
-                )
-              )
-              const key = `${String(claim.reserveArrayIndex)}-${reward.stats.rewardIndex}-${reward.stats.rewardCoinType}-${reward.stats.side}`
-              if (!claimKeys.has(key)) {
-                claimKeys.add(key)
-                claimRewards.push({
-                  reserveArrayIndex: claim.reserveArrayIndex,
-                  rewardIndex: BigInt(reward.stats.rewardIndex),
-                  rewardCoinType: reward.stats.rewardCoinType,
-                  side: reward.stats.side,
-                })
-              }
-            }
-          })
+          }
         })
       })
-      rewardSummary = {
-        protocol: "Suilend",
-        supplies: buildSupplyList(positions, "Suilend"),
-        rewards: Array.from(rewardTotals.entries())
-          .map(([coinType, reward]) => ({
-            token: reward.token,
-            amount: reward.amount,
-            coinType,
-          }))
-          .filter((reward) => reward.amount > 0),
-        claimMeta: claimRewards.length
-          ? {
-              suilend: {
-                rewards: claimRewards,
-                swapInputs: Array.from(rewardAtomicTotals.entries())
-                  .map(([coinType, amount]) => ({
-                    coinType,
-                    amountAtomic: amount.toFixed(0),
-                  }))
-                  .filter((input) => input.amountAtomic !== "0"),
-              },
+      obligation.borrows.forEach((borrow) => {
+        const rewards = rewardMapWithClaims[borrow.reserve.coinType]?.[Side.BORROW]
+        rewards?.forEach((reward) => {
+          const claim = reward.obligationClaims?.[obligation.id]
+          const amount = claim ? toNumber(claim.claimableAmount) : 0
+          if (amount > 0) {
+            const existing = rewardTotals.get(reward.stats.rewardCoinType)
+            rewardTotals.set(reward.stats.rewardCoinType, {
+              token: reward.stats.symbol,
+              amount: (existing?.amount ?? 0) + amount,
+            })
+            const decimals = reward.stats.mintDecimals ?? 0
+            const atomic = claim.claimableAmount
+              .multipliedBy(new BigNumber(10).pow(decimals))
+              .integerValue(BigNumber.ROUND_FLOOR)
+            rewardAtomicTotals.set(
+              reward.stats.rewardCoinType,
+              (rewardAtomicTotals.get(reward.stats.rewardCoinType) ?? new BigNumber(0)).plus(
+                atomic
+              )
+            )
+            const key = `${String(claim.reserveArrayIndex)}-${reward.stats.rewardIndex}-${reward.stats.rewardCoinType}-${reward.stats.side}`
+            if (!claimKeys.has(key)) {
+              claimKeys.add(key)
+              claimRewards.push({
+                reserveArrayIndex: claim.reserveArrayIndex,
+                rewardIndex: BigInt(reward.stats.rewardIndex),
+                rewardCoinType: reward.stats.rewardCoinType,
+                side: reward.stats.side,
+              })
             }
-          : undefined,
-      }
+          }
+        })
+      })
+    })
+    rewardSummary = {
+      protocol: "Suilend",
+      supplies: buildSupplyList(positions, "Suilend"),
+      rewards: Array.from(rewardTotals.entries())
+        .map(([coinType, reward]) => ({
+          token: reward.token,
+          amount: reward.amount,
+          coinType,
+        }))
+        .filter((reward) => reward.amount > 0),
+      claimMeta: claimRewards.length
+        ? {
+            suilend: {
+              rewards: claimRewards,
+              swapInputs: Array.from(rewardAtomicTotals.entries())
+                .map(([coinType, amount]) => ({
+                  coinType,
+                  amountAtomic: amount.toFixed(0),
+                }))
+                .filter((input) => input.amountAtomic !== "0"),
+            },
+          }
+        : undefined,
     }
-
-    return { rows, positions, rewardSummary }
   } catch (error) {
-    console.error("Suilend fetch failed:", error)
-    return { rows: [], positions: {} }
+    console.error("Suilend user fetch failed:", error)
+  }
+  return { positions, rewardSummary }
+}
+
+export async function fetchSuilend(
+  address?: string | null
+): Promise<MarketFetchResult> {
+  const [market, user] = await Promise.all([
+    fetchSuilendMarket(),
+    fetchSuilendUser(address),
+  ])
+  return {
+    rows: market.rows,
+    positions: user.positions,
+    rewardSummary: user.rewardSummary,
   }
 }

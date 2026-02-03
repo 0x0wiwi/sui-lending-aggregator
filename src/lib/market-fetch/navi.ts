@@ -13,7 +13,7 @@ import {
   type RewardSummaryItem,
 } from "@/lib/market-data"
 import { createPositionKey, type WalletPositions } from "@/lib/positions"
-import { type MarketFetchResult } from "./types"
+import { type MarketFetchResult, type MarketOnlyResult, type UserOnlyResult } from "./types"
 import {
   buildSupplyList,
   formatTokenSymbol,
@@ -34,7 +34,7 @@ function buildNaviIncentives(
   }))
 }
 
-export async function fetchNavi(address?: string | null): Promise<MarketFetchResult> {
+export async function fetchNaviMarket(): Promise<MarketOnlyResult> {
   try {
     const pools = await getPools({ env: "prod" })
     const preferredCoinType: Record<AssetSymbol, string> = {
@@ -138,56 +138,72 @@ export async function fetchNavi(address?: string | null): Promise<MarketFetchRes
       })
       .filter((row): row is MarketRow => Boolean(row))
 
-    let positions: WalletPositions = {}
-    let rewardSummary: RewardSummaryItem | undefined
-    if (address) {
-      const lendingStates = await getLendingState(address, { env: "prod" })
-      positions = lendingStates.reduce<WalletPositions>((acc, state) => {
-        const token = state.pool?.token as
-          | { symbol?: string; address?: string; coinType?: string }
-          | undefined
-        const asset = toAssetSymbolFromSource(
-          token?.symbol,
-          token?.address ?? token?.coinType
-        )
-        if (!asset) return acc
-        const key = createPositionKey("Navi", asset)
-        const amount = toNumber(state.supplyBalance)
-        acc[key] = (acc[key] ?? 0) + amount
-        return acc
-      }, {})
-      rewardSummary = {
-        protocol: "Navi",
-        supplies: buildSupplyList(positions, "Navi"),
-        rewards: [],
-      }
-      try {
-        const rewards = await getUserAvailableLendingRewards(address, { env: "prod" })
-        const rewardTotals = new Map<string, number>()
-        rewards
-          .filter((reward) => reward.userClaimableReward > 0)
-          .forEach((reward) => {
-            rewardTotals.set(
-              reward.rewardCoinType,
-              (rewardTotals.get(reward.rewardCoinType) ?? 0)
-                + toNumber(reward.userClaimableReward)
-            )
-          })
-        rewardSummary.rewards = Array.from(rewardTotals.entries())
-          .map(([coinType, amount]) => ({
-            token: formatTokenSymbol(coinType),
-            amount,
-            coinType,
-          }))
-          .filter((reward) => reward.amount > 0)
-      } catch (error) {
-        console.error("Navi reward fetch failed:", error)
-      }
-    }
-
-    return { rows, positions, rewardSummary }
+    return { rows }
   } catch (error) {
-    console.error("Navi fetch failed:", error)
-    return { rows: [], positions: {} }
+    console.error("Navi market fetch failed:", error)
+    return { rows: [] }
+  }
+}
+
+export async function fetchNaviUser(address?: string | null): Promise<UserOnlyResult> {
+  let positions: WalletPositions = {}
+  let rewardSummary: RewardSummaryItem | undefined
+  if (address) {
+    const lendingStates = await getLendingState(address, { env: "prod" })
+    positions = lendingStates.reduce<WalletPositions>((acc, state) => {
+      const token = state.pool?.token as
+        | { symbol?: string; address?: string; coinType?: string }
+        | undefined
+      const asset = toAssetSymbolFromSource(
+        token?.symbol,
+        token?.address ?? token?.coinType
+      )
+      if (!asset) return acc
+      const key = createPositionKey("Navi", asset)
+      const amount = toNumber(state.supplyBalance)
+      acc[key] = (acc[key] ?? 0) + amount
+      return acc
+    }, {})
+    rewardSummary = {
+      protocol: "Navi",
+      supplies: buildSupplyList(positions, "Navi"),
+      rewards: [],
+    }
+    try {
+      const rewards = await getUserAvailableLendingRewards(address, { env: "prod" })
+      const rewardTotals = new Map<string, number>()
+      rewards
+        .filter((reward) => reward.userClaimableReward > 0)
+        .forEach((reward) => {
+          rewardTotals.set(
+            reward.rewardCoinType,
+            (rewardTotals.get(reward.rewardCoinType) ?? 0)
+              + toNumber(reward.userClaimableReward)
+          )
+        })
+      rewardSummary.rewards = Array.from(rewardTotals.entries())
+        .map(([coinType, amount]) => ({
+          token: formatTokenSymbol(coinType),
+          amount,
+          coinType,
+        }))
+        .filter((reward) => reward.amount > 0)
+    } catch (error) {
+      console.error("Navi reward fetch failed:", error)
+    }
+  }
+
+  return { positions, rewardSummary }
+}
+
+export async function fetchNavi(address?: string | null): Promise<MarketFetchResult> {
+  const [market, user] = await Promise.all([
+    fetchNaviMarket(),
+    fetchNaviUser(address),
+  ])
+  return {
+    rows: market.rows,
+    positions: user.positions,
+    rewardSummary: user.rewardSummary,
   }
 }

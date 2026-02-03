@@ -7,6 +7,15 @@ export type MarketFetchResult = {
   rewardSummary?: RewardSummaryItem
 }
 
+export type MarketOnlyResult = {
+  rows: MarketRow[]
+}
+
+export type UserOnlyResult = {
+  positions: WalletPositions
+  rewardSummary?: RewardSummaryItem
+}
+
 export type MarketSnapshot = {
   rows: MarketRow[]
   positions: WalletPositions
