@@ -74,3 +74,9 @@
 - 所有幣種小數位數以鏈上 `getCoinMetadata` 的 `decimals` 為準。
 - 顯示與 swap/claim 計算都使用 **截斷（ROUND_FLOOR）**，避免超出鏈上可表示的精度。
 - 任何換算後的原子量為 0 的數量，視為不可 claim / swap，需在 UI 與交易組合時過濾。
+
+## 前端結構重點
+- Claim/Swap 相關邏輯集中在 `src/hooks/use-claim-rewards.ts`，協議 claim 組裝拆到 `src/hooks/claim/`。
+- Reward Summary UI 拆分於 `src/components/reward-summary/`，表格格式化抽於 `src/components/market-table/`。
+- 篩選/排序/視圖狀態封裝在 `src/hooks/use-market-filters.ts`，並以 `localStorage` 保存。
+- 可用 `?address=0x...` 進行地址預覽；預覽模式不顯示 claim 按鈕。
