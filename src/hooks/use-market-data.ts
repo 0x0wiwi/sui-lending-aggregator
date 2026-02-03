@@ -271,8 +271,10 @@ export function useMarketData(address?: string | null): MarketDataState {
   }, [buildSummary, buildUserSignature, mergePositions, userQueries])
 
   const refreshAll = React.useCallback(() => {
-    queryClient.invalidateQueries({ queryKey: ["market"] })
-    queryClient.invalidateQueries({ queryKey: ["user"] })
+    void Promise.all([
+      queryClient.refetchQueries({ queryKey: ["market"] }),
+      queryClient.refetchQueries({ queryKey: ["user"] }),
+    ])
   }, [queryClient])
 
   React.useEffect(() => {
