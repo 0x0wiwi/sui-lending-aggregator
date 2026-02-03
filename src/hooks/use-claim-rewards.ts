@@ -217,9 +217,6 @@ export function useClaimRewards({
             steps: [],
             note: "Missing coin type",
           })
-          if (import.meta.env.DEV) {
-            console.warn("[swap-preview] missing coinType:", reward)
-          }
           canSwapAll = false
           continue
         }
@@ -244,14 +241,6 @@ export function useClaimRewards({
             .toString(10)
         )
         if (amountAtomic.isZero()) {
-          if (import.meta.env.DEV) {
-            console.warn("[swap-preview] amount too small:", {
-              token: reward.token,
-              coinType: reward.coinType,
-              amount: reward.amount,
-              decimals,
-            })
-          }
           continue
         }
         const routerResult = await aggregatorClient.findRouters({
@@ -260,15 +249,6 @@ export function useClaimRewards({
           amount: amountAtomic,
           byAmountIn: true,
         })
-        if (import.meta.env.DEV) {
-          console.info("[swap-preview] router result:", {
-            token: reward.token,
-            coinType: reward.coinType,
-            target: swapTargetCoinType,
-            amountAtomic: amountAtomic.toString(10),
-            routerResult,
-          })
-        }
         const steps =
           routerResult?.paths?.map((path) => ({
             from: formatTokenSymbol(path.from),
@@ -276,14 +256,6 @@ export function useClaimRewards({
             provider: path.provider,
           })) ?? []
         if (!steps.length) {
-          if (import.meta.env.DEV) {
-            console.warn("[swap-preview] no route:", {
-              token: reward.token,
-              coinType: reward.coinType,
-              amount: reward.amount,
-              target: swapTargetCoinType,
-            })
-          }
           canSwapAll = false
         }
         const estimatedOut =
@@ -305,9 +277,6 @@ export function useClaimRewards({
         canSwapAll,
       }
     } finally {
-      if (import.meta.env.DEV) {
-        console.info("[swap-preview] canSwapAll:", canSwapAll)
-      }
       setSwapPreviewLoading(false)
     }
   }, [
