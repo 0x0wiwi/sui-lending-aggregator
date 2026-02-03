@@ -132,6 +132,7 @@ export function MarketDashboard() {
     () => Array.from(new Set([
       ...swapOptions.map((option) => option.coinType),
       ...rewardCoinTypes,
+      ...supportedAssets.map((asset) => assetTypeAddresses[asset]),
     ])),
     [rewardCoinTypes]
   )

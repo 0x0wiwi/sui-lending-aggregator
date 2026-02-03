@@ -12,13 +12,17 @@ export function useCoinDecimals(coinTypes: string[]) {
       const entries = await Promise.all(
         coinTypes.map(async (coinType) => {
           const metadata = await suiClient.getCoinMetadata({ coinType })
-          return [coinType, metadata?.decimals ?? 0] as const
+          if (metadata?.decimals === undefined || metadata?.decimals === null) {
+            return [coinType, null] as const
+          }
+          return [coinType, metadata.decimals] as const
         })
       )
       if (!isActive) return
       setDecimalsMap((prev) => {
         const next = { ...prev }
         entries.forEach(([coinType, decimals]) => {
+          if (decimals === null) return
           next[coinType] = decimals
         })
         return next

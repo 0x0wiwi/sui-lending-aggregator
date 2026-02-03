@@ -1,10 +1,10 @@
 import BigNumber from "bignumber.js"
 
 export function formatAmount(value: number, decimals?: number) {
-  const maxDigits =
-    typeof decimals === "number" && Number.isFinite(decimals)
-      ? Math.max(decimals, 0)
-      : 12
+  if (typeof decimals !== "number" || !Number.isFinite(decimals)) {
+    return "—"
+  }
+  const maxDigits = Math.max(decimals, 0)
   const fixed = new BigNumber(value).toFixed(maxDigits, BigNumber.ROUND_FLOOR)
   const [whole, fractionRaw] = fixed.split(".")
   const fraction = fractionRaw ? fractionRaw.replace(/0+$/, "") : ""

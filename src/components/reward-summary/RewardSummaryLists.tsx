@@ -26,7 +26,7 @@ export function RewardSupplyList({ supplies, decimalsMap }: RewardSupplyListProp
               item.amount,
               decimalsMap[
                 assetTypeAddresses[item.asset as keyof typeof assetTypeAddresses]
-              ] ?? 12
+              ]
             )}
           </span>
         </div>
@@ -48,7 +48,7 @@ export function RewardTokenList({ rewards, decimalsMap }: RewardTokenListProps) 
           <span>
             {renderAlignedNumber(
               item.amount,
-              item.coinType ? decimalsMap[item.coinType] : 12
+              item.coinType ? decimalsMap[item.coinType] : undefined
             )}
           </span>
         </div>
