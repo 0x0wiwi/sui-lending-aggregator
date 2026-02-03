@@ -28,10 +28,16 @@ const defaultFilters = {
 const filterStorageKey = "lending-market-filters"
 const viewStorageKey = "lending-market-view"
 const sortStorageKey = "lending-market-sort"
+const swapTargetStorageKey = "lending-market-swap-target"
+const swapEnabledStorageKey = "lending-market-swap-enabled"
 const swapOptions = [
   {
     label: "SUI",
     coinType: assetTypeAddresses.SUI,
+  },
+  {
+    label: "XBTC",
+    coinType: assetTypeAddresses.XBTC,
   },
   {
     label: "USDC",
@@ -111,16 +117,34 @@ export function MarketDashboard() {
     viewStorageKey,
     sortStorageKey,
   })
-  const [swapTarget, setSwapTarget] = React.useState<string>(
-    assetTypeAddresses.USDC
-  )
-  const [swapEnabled, setSwapEnabled] = React.useState<boolean>(true)
+  const [swapTarget, setSwapTarget] = React.useState<string>(() => {
+    if (typeof window === "undefined") return assetTypeAddresses.USDC
+    const stored = window.localStorage.getItem(swapTargetStorageKey)
+    if (!stored) return assetTypeAddresses.USDC
+    return swapOptions.some((option) => option.coinType === stored)
+      ? stored
+      : assetTypeAddresses.USDC
+  })
+  const [swapEnabled, setSwapEnabled] = React.useState<boolean>(() => {
+    if (typeof window === "undefined") return true
+    const stored = window.localStorage.getItem(swapEnabledStorageKey)
+    if (!stored) return true
+    return stored === "true"
+  })
   const swapTargetLabel =
     swapOptions.find((option) => option.coinType === swapTarget)?.label ?? "USDC"
   const swapTargetOptions = React.useMemo(
     () => swapOptions.map(({ label, coinType }) => ({ label, coinType })),
     []
   )
+  React.useEffect(() => {
+    if (typeof window === "undefined") return
+    window.localStorage.setItem(swapTargetStorageKey, swapTarget)
+  }, [swapTarget])
+  React.useEffect(() => {
+    if (typeof window === "undefined") return
+    window.localStorage.setItem(swapEnabledStorageKey, String(swapEnabled))
+  }, [swapEnabled])
   const rewardCoinTypes = React.useMemo(
     () =>
       rewardSummary.flatMap((item) =>
