@@ -1,4 +1,5 @@
 import * as React from "react"
+import BigNumber from "bignumber.js"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -16,7 +17,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
-import type { Protocol, RewardSummaryItem } from "@/lib/market-data"
+import { assetTypeAddresses, type Protocol } from "@/lib/market-data"
+import type { RewardSummaryItem } from "@/lib/market-data"
 
 type RewardSummaryCardProps = {
   displayAddress?: string | null
@@ -27,6 +29,7 @@ type RewardSummaryCardProps = {
   claimError: string | null
   claimingProtocol: Protocol | "all" | null
   hasAnyClaim: boolean
+  coinDecimalsMap: Record<string, number>
   onClaimProtocol: (protocol: Protocol) => void
   onClaimAll: () => void
   isProtocolClaimSupported: (protocol: Protocol) => boolean
@@ -45,26 +48,35 @@ type RewardSummaryCardProps = {
         items: Array<{
           token: string
           amount: number
+          coinType?: string
           steps: Array<{ from: string; target: string; provider: string }>
           estimatedOut?: string
           note?: string
         }>
         targetSymbol: string
+        canSwapAll: boolean
       }
     | null
   >
   swapPreviewLoading: boolean
 }
 
-function formatAmount(value: number) {
-  return value.toLocaleString("en-US", {
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 12,
+function formatAmount(value: number, decimals?: number) {
+  const maxDigits =
+    typeof decimals === "number" && Number.isFinite(decimals)
+      ? Math.max(decimals, 0)
+      : 12
+  const fixed = new BigNumber(value).toFixed(maxDigits, BigNumber.ROUND_FLOOR)
+  const [whole, fractionRaw] = fixed.split(".")
+  const fraction = fractionRaw ? fractionRaw.replace(/0+$/, "") : ""
+  const wholeFormatted = Number(whole).toLocaleString("en-US", {
+    maximumFractionDigits: 0,
   })
+  return fraction ? `${wholeFormatted}.${fraction}` : wholeFormatted
 }
 
-function renderAlignedNumber(value: number) {
-  const formatted = formatAmount(value)
+function renderAlignedNumber(value: number, decimals?: number) {
+  const formatted = formatAmount(value, decimals)
   const [whole, fraction] = formatted.split(".")
   return (
     <span className="inline-flex items-baseline tabular-nums">
@@ -76,21 +88,34 @@ function renderAlignedNumber(value: number) {
   )
 }
 
-function renderSupplyList(supplies: { asset: string; amount: number }[]) {
+function renderSupplyList(
+  supplies: { asset: string; amount: number }[],
+  decimalsMap: Record<string, number>
+) {
   if (!supplies.length) return "—"
   return (
     <div className="grid gap-1">
       {supplies.map((item) => (
         <div key={item.asset} className="grid grid-cols-[5ch_1fr] items-baseline gap-3">
           <span className="font-medium">{item.asset}</span>
-          <span>{renderAlignedNumber(item.amount)}</span>
+          <span>
+            {renderAlignedNumber(
+              item.amount,
+              decimalsMap[
+                assetTypeAddresses[item.asset as keyof typeof assetTypeAddresses]
+              ] ?? 12
+            )}
+          </span>
         </div>
       ))}
     </div>
   )
 }
 
-function renderRewardList(rewards: RewardSummaryItem["rewards"]) {
+function renderRewardList(
+  rewards: RewardSummaryItem["rewards"],
+  decimalsMap: Record<string, number>
+) {
   if (!rewards.length) return "—"
   return (
     <div className="grid gap-1">
@@ -100,11 +125,31 @@ function renderRewardList(rewards: RewardSummaryItem["rewards"]) {
           className="grid grid-cols-[5ch_1fr] items-baseline gap-3"
         >
           <span className="font-medium">{item.token}</span>
-          <span>{renderAlignedNumber(item.amount)}</span>
+          <span>
+            {renderAlignedNumber(
+              item.amount,
+              item.coinType ? decimalsMap[item.coinType] : 12
+            )}
+          </span>
         </div>
       ))}
     </div>
   )
+}
+
+function hasClaimableRewards(
+  rewards: RewardSummaryItem["rewards"],
+  decimalsMap: Record<string, number>
+) {
+  return rewards.some((reward) => {
+    if (!reward.coinType) return false
+    const decimals = decimalsMap[reward.coinType]
+    if (decimals === undefined) return false
+    const atomic = new BigNumber(reward.amount)
+      .shiftedBy(decimals)
+      .integerValue(BigNumber.ROUND_FLOOR)
+    return atomic.gt(0)
+  })
 }
 
 export function RewardSummaryCard({
@@ -116,6 +161,7 @@ export function RewardSummaryCard({
   claimError,
   claimingProtocol,
   hasAnyClaim,
+  coinDecimalsMap,
   onClaimProtocol,
   onClaimAll,
   isProtocolClaimSupported,
@@ -144,16 +190,22 @@ export function RewardSummaryCard({
     items: Array<{
       token: string
       amount: number
+      coinType?: string
       steps: Array<{ from: string; target: string; provider: string }>
       estimatedOut?: string
       note?: string
     }>
     targetSymbol: string
+    canSwapAll: boolean
   } | null>(null)
   const actionButtonClass = swapEnabled
     ? "w-full min-w-0 justify-center"
     : "w-[96px] min-w-0 justify-center"
   const swapDisabled = swapEnabled && !swapAvailable
+  const totalHasClaimableRewards = hasClaimableRewards(
+    totalRewardList,
+    coinDecimalsMap
+  )
 
   const handleClaim = async (
     protocol: Protocol,
@@ -237,41 +289,52 @@ export function RewardSummaryCard({
                 <div className="flex items-center justify-between">
                   <div className="font-medium">{item.protocol}</div>
                   {showClaimActions && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className={actionButtonClass}
-                      onClick={() => handleClaim(item.protocol, item.rewards)}
-                      disabled={
-                        claimingProtocol !== null
-                        || !item.rewards.length
-                        || !isProtocolClaimSupported(item.protocol)
-                        || swapDisabled
-                      }
-                      title={
-                        !isProtocolClaimSupported(item.protocol)
-                          ? "Claim not available"
-                          : swapDisabled
-                            ? "Swap unavailable"
-                            : undefined
-                      }
-                    >
-                      {claimingProtocol === item.protocol
-                        ? "Claiming..."
-                        : swapEnabled
-                          ? "Claim + Swap"
-                          : "Claim"}
-                    </Button>
+                    (() => {
+                      const canClaim = hasClaimableRewards(
+                        item.rewards,
+                        coinDecimalsMap
+                      )
+                      return (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className={actionButtonClass}
+                          onClick={() => handleClaim(item.protocol, item.rewards)}
+                          disabled={
+                            claimingProtocol !== null
+                            || !item.rewards.length
+                            || !isProtocolClaimSupported(item.protocol)
+                            || swapDisabled
+                            || !canClaim
+                          }
+                          title={
+                            !isProtocolClaimSupported(item.protocol)
+                              ? "Claim not available"
+                              : swapDisabled
+                                ? "Swap unavailable"
+                                : !canClaim
+                                  ? "Amount too small"
+                                  : undefined
+                          }
+                        >
+                          {claimingProtocol === item.protocol
+                            ? "Claiming..."
+                            : swapEnabled
+                              ? "Claim + Swap"
+                              : "Claim"}
+                        </Button>
+                      )
+                    })()
                   )}
                 </div>
                 <div className="mt-2 grid gap-2">
-                  <div>
-                    <div className="text-[11px] text-muted-foreground">Supplied Assets</div>
-                    {renderSupplyList(item.supplies)}
+                    <div>
+                      <div className="text-[11px] text-muted-foreground">Supplied Assets</div>
+                    {renderSupplyList(item.supplies, coinDecimalsMap)}
                   </div>
                   <div>
                     <div className="text-[11px] text-muted-foreground">Rewards</div>
-                    {renderRewardList(item.rewards)}
+                    {renderRewardList(item.rewards, coinDecimalsMap)}
                   </div>
                 </div>
               </div>
@@ -289,8 +352,15 @@ export function RewardSummaryCard({
                       claimingProtocol !== null
                       || !hasAnyClaim
                       || swapDisabled
+                      || !totalHasClaimableRewards
                     }
-                    title={swapDisabled ? "Swap unavailable" : undefined}
+                    title={
+                      swapDisabled
+                        ? "Swap unavailable"
+                        : !totalHasClaimableRewards
+                          ? "Amount too small"
+                          : undefined
+                    }
                   >
                     {claimingProtocol === "all"
                       ? "Claiming..."
@@ -303,11 +373,11 @@ export function RewardSummaryCard({
               <div className="mt-2 grid gap-2">
                 <div>
                   <div className="text-[11px] text-muted-foreground">Supplied Assets</div>
-                  {renderSupplyList(totalSupplyList)}
+                  {renderSupplyList(totalSupplyList, coinDecimalsMap)}
                 </div>
                 <div>
                   <div className="text-[11px] text-muted-foreground">Rewards</div>
-                  {renderRewardList(totalRewardList)}
+                  {renderRewardList(totalRewardList, coinDecimalsMap)}
                 </div>
               </div>
             </div>
@@ -335,39 +405,50 @@ export function RewardSummaryCard({
                   <tr key={item.protocol} className="border-b last:border-b-0">
                     <td className="px-2 py-1 font-medium">{item.protocol}</td>
                     <td className="px-2 py-1 align-top whitespace-normal">
-                      {renderSupplyList(item.supplies)}
+                      {renderSupplyList(item.supplies, coinDecimalsMap)}
                     </td>
                     <td className="px-2 py-1 align-top whitespace-normal">
-                      {renderRewardList(item.rewards)}
+                      {renderRewardList(item.rewards, coinDecimalsMap)}
                     </td>
                     {showClaimActions && (
                       <td className="px-2 py-1 align-top whitespace-nowrap text-right w-[160px]">
                         <div className="flex justify-end">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className={`${actionButtonClass} text-[11px]`}
-                            onClick={() => handleClaim(item.protocol, item.rewards)}
-                            disabled={
-                              claimingProtocol !== null
-                              || !item.rewards.length
-                              || !isProtocolClaimSupported(item.protocol)
-                              || swapDisabled
-                            }
-                            title={
-                              !isProtocolClaimSupported(item.protocol)
-                                ? "Claim not available"
-                                : swapDisabled
-                                  ? "Swap unavailable"
-                                  : undefined
-                            }
-                          >
-                            {claimingProtocol === item.protocol
-                              ? "Claiming..."
-                              : swapEnabled
-                                ? "Claim + Swap"
-                                : "Claim"}
-                          </Button>
+                          {(() => {
+                            const canClaim = hasClaimableRewards(
+                              item.rewards,
+                              coinDecimalsMap
+                            )
+                            return (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className={`${actionButtonClass} text-[11px]`}
+                                onClick={() => handleClaim(item.protocol, item.rewards)}
+                                disabled={
+                                  claimingProtocol !== null
+                                  || !item.rewards.length
+                                  || !isProtocolClaimSupported(item.protocol)
+                                  || swapDisabled
+                                  || !canClaim
+                                }
+                                title={
+                                  !isProtocolClaimSupported(item.protocol)
+                                    ? "Claim not available"
+                                    : swapDisabled
+                                      ? "Swap unavailable"
+                                      : !canClaim
+                                        ? "Amount too small"
+                                        : undefined
+                                }
+                              >
+                                {claimingProtocol === item.protocol
+                                  ? "Claiming..."
+                                  : swapEnabled
+                                    ? "Claim + Swap"
+                                    : "Claim"}
+                              </Button>
+                            )
+                          })()}
                         </div>
                       </td>
                     )}
@@ -376,10 +457,10 @@ export function RewardSummaryCard({
                 <tr className="border-t bg-muted/30">
                   <td className="px-2 py-1 font-medium">Total</td>
                   <td className="px-2 py-1 align-top whitespace-normal">
-                    {renderSupplyList(totalSupplyList)}
+                    {renderSupplyList(totalSupplyList, coinDecimalsMap)}
                   </td>
                   <td className="px-2 py-1 align-top whitespace-normal">
-                    {renderRewardList(totalRewardList)}
+                    {renderRewardList(totalRewardList, coinDecimalsMap)}
                   </td>
                   {showClaimActions && (
                     <td className="px-2 py-1 align-top whitespace-nowrap text-right w-[160px]">
@@ -393,8 +474,15 @@ export function RewardSummaryCard({
                             claimingProtocol !== null
                             || !hasAnyClaim
                             || swapDisabled
+                            || !totalHasClaimableRewards
                           }
-                          title={swapDisabled ? "Swap unavailable" : undefined}
+                          title={
+                            swapDisabled
+                              ? "Swap unavailable"
+                              : !totalHasClaimableRewards
+                                ? "Amount too small"
+                                : undefined
+                          }
                         >
                           {claimingProtocol === "all"
                             ? "Claiming..."
@@ -443,7 +531,12 @@ export function RewardSummaryCard({
                   <div key={item.token} className="grid gap-1 rounded-md border p-2">
                     <div className="flex items-center justify-between font-medium">
                       <span>{item.token}</span>
-                      <span>{formatAmount(item.amount)}</span>
+                      <span>
+                        {formatAmount(
+                          item.amount,
+                          item.coinType ? coinDecimalsMap[item.coinType] : undefined
+                        )}
+                      </span>
                     </div>
                     {item.note ? (
                       <div className="text-muted-foreground">{item.note}</div>
@@ -457,23 +550,30 @@ export function RewardSummaryCard({
                 <div className="flex items-center justify-between border-t pt-2 text-xs font-semibold">
                   <span>Total</span>
                   <span>
-                    {swapPreview.items
-                      .map((item) =>
-                        item.estimatedOut
-                          ? Number(item.estimatedOut.replace(/,/g, ""))
-                          : 0
-                      )
-                      .reduce((sum, value) => sum + value, 0)
-                      .toLocaleString("en-US", {
-                        minimumFractionDigits: 0,
-                        maximumFractionDigits: 12,
-                      })}{" "}
-                    {swapPreview.targetSymbol}
+                    {swapPreview.items.length
+                      ? swapPreview.items
+                          .map((item) =>
+                            item.estimatedOut
+                              ? Number(item.estimatedOut.replace(/,/g, ""))
+                              : 0
+                          )
+                          .reduce((sum, value) => sum + value, 0)
+                          .toLocaleString("en-US", {
+                            minimumFractionDigits: 0,
+                            maximumFractionDigits: 12,
+                          })
+                      : "—"}{" "}
+                    {swapPreview.items.length ? swapPreview.targetSymbol : ""}
                   </span>
                 </div>
+                {!swapPreview.canSwapAll && (
+                  <div className="text-xs text-destructive">
+                    Some rewards cannot be swapped.
+                  </div>
+                )}
               </div>
             ) : (
-              <div>No swap routes available.</div>
+              <div>No swappable rewards.</div>
             )}
           </div>
           <AlertDialogFooter>
@@ -489,6 +589,12 @@ export function RewardSummaryCard({
                 setConfirmTarget(null)
                 setSwapPreview(null)
               }}
+              disabled={
+                !swapPreview
+                || swapPreviewLoading
+                || !swapPreview.canSwapAll
+                || !swapPreview.items.length
+              }
             >
               Continue
             </AlertDialogAction>

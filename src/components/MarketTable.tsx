@@ -1,4 +1,5 @@
 import * as React from "react"
+import BigNumber from "bignumber.js"
 import { ChevronDownIcon, ChevronUpIcon } from "lucide-react"
 
 import { Badge } from "@/components/ui/badge"
@@ -21,6 +22,7 @@ export type SortDirection = "asc" | "desc"
 type MarketTableProps = {
   rows: MarketRow[]
   positions: WalletPositions
+  coinDecimalsMap: Record<string, number>
   sortKey: SortKey
   sortDirection: SortDirection
   onSort: (key: SortKey) => void
@@ -177,6 +179,7 @@ export function MarketTable({
   sortKey,
   sortDirection,
   onSort,
+  coinDecimalsMap,
 }: MarketTableProps) {
   const [copiedAsset, setCopiedAsset] = React.useState<MarketRow["asset"] | null>(null)
   const copyTimer = React.useRef<number | null>(null)
@@ -199,6 +202,26 @@ export function MarketTable({
       }
     }
   }, [])
+
+  const formatTokenAmount = React.useCallback(
+    (asset: MarketRow["asset"], amount: number | null) => {
+      if (amount === null) return "—"
+      const coinType = assetTypeAddresses[asset]
+      const decimals = coinType ? coinDecimalsMap[coinType] : undefined
+      const maxDigits =
+        typeof decimals === "number" && Number.isFinite(decimals)
+          ? Math.max(decimals, 0)
+          : 12
+      const fixed = new BigNumber(amount).toFixed(maxDigits, BigNumber.ROUND_FLOOR)
+      const [whole, fractionRaw] = fixed.split(".")
+      const fraction = fractionRaw ? fractionRaw.replace(/0+$/, "") : ""
+      const wholeFormatted = Number(whole).toLocaleString("en-US", {
+        maximumFractionDigits: 0,
+      })
+      return fraction ? `${wholeFormatted}.${fraction}` : wholeFormatted
+    },
+    [coinDecimalsMap]
+  )
 
   return (
     <>
@@ -310,7 +333,7 @@ export function MarketTable({
                     {renderAlignedPercent(row.utilization)}
                   </td>
                   <td className="px-3 py-3">
-                    {position ? position.toLocaleString() : "—"}
+                    {formatTokenAmount(row.asset, position)}
                   </td>
                 </tr>
               )
@@ -380,7 +403,7 @@ export function MarketTable({
                 <div className="flex items-center justify-between">
                   <span className="text-muted-foreground">Your Supply</span>
                   <span className={cn(!position && "text-muted-foreground")}>
-                    {position ? position.toLocaleString() : "—"}
+                    {formatTokenAmount(row.asset, position)}
                   </span>
                 </div>
               </CardContent>

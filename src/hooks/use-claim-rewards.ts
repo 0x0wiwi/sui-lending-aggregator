@@ -207,9 +207,32 @@ export function useClaimRewards({
   >(null)
   const [claimError, setClaimError] = React.useState<string | null>(null)
 
+  const normalizeRewardAmount = React.useCallback(
+    (amount: number, coinType?: string) => {
+      if (!coinType) return amount
+      const decimals = coinDecimalsMap[coinType]
+      if (decimals === undefined) return amount
+      return Number(
+        new BigNumber(amount).toFixed(decimals, BigNumber.ROUND_FLOOR)
+      )
+    },
+    [coinDecimalsMap]
+  )
+  const normalizedSummaryRows = React.useMemo(
+    () =>
+      summaryRows.map((item) => ({
+        ...item,
+        rewards: item.rewards.map((reward) => ({
+          ...reward,
+          amount: normalizeRewardAmount(reward.amount, reward.coinType),
+        })),
+      })),
+    [normalizeRewardAmount, summaryRows]
+  )
   const findSummary = React.useCallback(
-    (protocol: Protocol) => summaryRows.find((item) => item.protocol === protocol),
-    [summaryRows]
+    (protocol: Protocol) =>
+      normalizedSummaryRows.find((item) => item.protocol === protocol),
+    [normalizedSummaryRows]
   )
   const getRewardsForProtocol = React.useCallback(
     (protocol: Protocol) => findSummary(protocol)?.rewards ?? [],
@@ -223,16 +246,27 @@ export function useClaimRewards({
     () => findSummary("Suilend")?.claimMeta?.suilend?.swapInputs ?? [],
     [findSummary]
   )
-  const hasSuilendClaim = suilendClaimRewards.length > 0
-  const hasAlphaClaim = getRewardsForProtocol("AlphaLend").some(
-    (reward) => reward.amount > 0
+  const hasClaimableRewardsForProtocol = React.useCallback(
+    (protocol: Protocol) => {
+      const rewards = getRewardsForProtocol(protocol)
+      return rewards.some((reward) => {
+        if (!reward.coinType) return false
+        const decimals = coinDecimalsMap[reward.coinType]
+        if (decimals === undefined) return false
+        const atomic = new BigNumber(reward.amount)
+          .shiftedBy(decimals)
+          .integerValue(BigNumber.ROUND_FLOOR)
+        return atomic.gt(0)
+      })
+    },
+    [coinDecimalsMap, getRewardsForProtocol]
   )
-  const hasNaviClaim = getRewardsForProtocol("Navi").some(
-    (reward) => reward.amount > 0
-  )
-  const hasScallopClaim = getRewardsForProtocol("Scallop").some(
-    (reward) => reward.amount > 0
-  )
+  const hasSuilendClaim =
+    suilendClaimRewards.length > 0
+    && hasClaimableRewardsForProtocol("Suilend")
+  const hasAlphaClaim = hasClaimableRewardsForProtocol("AlphaLend")
+  const hasNaviClaim = hasClaimableRewardsForProtocol("Navi")
+  const hasScallopClaim = hasClaimableRewardsForProtocol("Scallop")
   const hasAnyClaim =
     showClaimActions
     && (hasSuilendClaim || hasAlphaClaim || hasNaviClaim || hasScallopClaim)
@@ -353,29 +387,36 @@ export function useClaimRewards({
     if (!swapEnabled) return null
     if (!aggregatorClient) return null
     setSwapPreviewLoading(true)
+    let canSwapAll = true
     try {
       const items: Array<{
         token: string
         amount: number
+        coinType?: string
         steps: Array<{ from: string; target: string; provider: string }>
         estimatedOut?: string
         note?: string
       }> = []
-
       for (const reward of rewards) {
         if (!reward.coinType) {
           items.push({
             token: reward.token,
             amount: reward.amount,
+            coinType: reward.coinType,
             steps: [],
             note: "Missing coin type",
           })
+          if (import.meta.env.DEV) {
+            console.warn("[swap-preview] missing coinType:", reward)
+          }
+          canSwapAll = false
           continue
         }
         if (reward.coinType === swapTargetCoinType) {
           items.push({
             token: reward.token,
             amount: reward.amount,
+            coinType: reward.coinType,
             steps: [],
             note: "No swap needed",
             estimatedOut: reward.amount.toLocaleString("en-US", {
@@ -391,18 +432,49 @@ export function useClaimRewards({
             .integerValue(BigNumber.ROUND_FLOOR)
             .toString(10)
         )
+        if (amountAtomic.isZero()) {
+          if (import.meta.env.DEV) {
+            console.warn("[swap-preview] amount too small:", {
+              token: reward.token,
+              coinType: reward.coinType,
+              amount: reward.amount,
+              decimals,
+            })
+          }
+          continue
+        }
         const routerResult = await aggregatorClient.findRouters({
           from: reward.coinType,
           target: swapTargetCoinType,
           amount: amountAtomic,
           byAmountIn: true,
         })
+        if (import.meta.env.DEV) {
+          console.info("[swap-preview] router result:", {
+            token: reward.token,
+            coinType: reward.coinType,
+            target: swapTargetCoinType,
+            amountAtomic: amountAtomic.toString(10),
+            routerResult,
+          })
+        }
         const steps =
           routerResult?.paths?.map((path) => ({
             from: formatTokenSymbol(path.from),
             target: formatTokenSymbol(path.target),
             provider: path.provider,
           })) ?? []
+        if (!steps.length) {
+          if (import.meta.env.DEV) {
+            console.warn("[swap-preview] no route:", {
+              token: reward.token,
+              coinType: reward.coinType,
+              amount: reward.amount,
+              target: swapTargetCoinType,
+            })
+          }
+          canSwapAll = false
+        }
         const estimatedOut =
           swapTargetDecimals !== null && routerResult?.amountOut
             ? formatAtomicAmount(routerResult.amountOut, swapTargetDecimals)
@@ -410,6 +482,7 @@ export function useClaimRewards({
         items.push({
           token: reward.token,
           amount: reward.amount,
+          coinType: reward.coinType,
           steps,
           estimatedOut,
         })
@@ -418,8 +491,12 @@ export function useClaimRewards({
       return {
         items,
         targetSymbol: swapTargetSymbol,
+        canSwapAll,
       }
     } finally {
+      if (import.meta.env.DEV) {
+        console.info("[swap-preview] canSwapAll:", canSwapAll)
+      }
       setSwapPreviewLoading(false)
     }
   }, [
@@ -460,7 +537,10 @@ export function useClaimRewards({
       if (!aggregatorClient || !account?.address) return null
       const outputCoins: TransactionObjectArgument[] = []
       const swapInputs = inputs.filter(
-        (input) => input.coinType !== swapTargetCoinType
+        (input) =>
+          input.coinType !== swapTargetCoinType
+          && input.amountAtomic
+          && !input.amountAtomic.isZero()
       )
       if (swapInputs.some((input) => !input.amountAtomic)) {
         throw new Error("Missing coin decimals.")
@@ -805,7 +885,12 @@ export function useClaimRewards({
         inputs = result.inputs
         hasClaim = result.hasClaim
       }
-      if (!hasClaim) return null
+      if (inputs.length) {
+        inputs = inputs.filter(
+          (input) => input.amountAtomic && !input.amountAtomic.isZero()
+        )
+      }
+      if (!hasClaim || !inputs.length) return null
       if (swapEnabled) {
         if (!swapAvailable) {
           throw new Error("Swap not available.")
@@ -856,15 +941,18 @@ export function useClaimRewards({
       inputs.push(...result.inputs)
       hasClaim = hasClaim || result.hasClaim
     }
-    if (!hasClaim) return null
+    const filteredInputs = inputs.filter(
+      (input) => input.amountAtomic && !input.amountAtomic.isZero()
+    )
+    if (!hasClaim || !filteredInputs.length) return null
     if (swapEnabled) {
       if (!swapAvailable) {
         throw new Error("Swap not available.")
       }
-      await buildSwapFromInputs(tx, inputs)
+      await buildSwapFromInputs(tx, filteredInputs)
       return tx
     }
-    transferClaimedCoins(tx, inputs)
+    transferClaimedCoins(tx, filteredInputs)
     return tx
   }, [
     appendAlphaLendClaim,

@@ -1,4 +1,5 @@
 import * as React from "react"
+import BigNumber from "bignumber.js"
 import { RefreshCcwIcon } from "lucide-react"
 import { useCurrentAccount } from "@mysten/dapp-kit"
 
@@ -251,8 +252,32 @@ export function MarketDashboard() {
   const assetGroups = supportedAssets.filter((asset) =>
     filteredRows.some((row) => row.asset === asset)
   )
+  const normalizeRewardAmount = React.useCallback(
+    (amount: number, coinType?: string) => {
+      if (!coinType) return amount
+      const decimals = decimalsMap[coinType]
+      if (decimals === undefined) return amount
+      return Number(
+        new BigNumber(amount).toFixed(decimals, BigNumber.ROUND_FLOOR)
+      )
+    },
+    [decimalsMap]
+  )
+  const normalizedRewardSummary = React.useMemo(
+    () =>
+      rewardSummary.map((item) => ({
+        ...item,
+        rewards: item.rewards.map((reward) => ({
+          ...reward,
+          amount: normalizeRewardAmount(reward.amount, reward.coinType),
+        })),
+      })),
+    [normalizeRewardAmount, rewardSummary]
+  )
   const summaryRows = supportedProtocols
-    .map((protocol) => rewardSummary.find((item) => item.protocol === protocol))
+    .map((protocol) =>
+      normalizedRewardSummary.find((item) => item.protocol === protocol)
+    )
     .filter((item): item is NonNullable<typeof item> => Boolean(item))
   const totalSupplies = summaryRows.reduce<Record<string, number>>(
     (acc, item) => {
@@ -336,6 +361,7 @@ export function MarketDashboard() {
             claimError={claimError}
             claimingProtocol={claimingProtocol}
             hasAnyClaim={hasAnyClaim}
+            coinDecimalsMap={decimalsMap}
             onClaimProtocol={handleClaimProtocol}
             onClaimAll={handleClaimAll}
             isProtocolClaimSupported={isProtocolClaimSupported}
@@ -379,6 +405,7 @@ export function MarketDashboard() {
                 <MarketTable
                   rows={sortedRows}
                   positions={positions}
+                  coinDecimalsMap={decimalsMap}
                   sortKey={sortKey}
                   sortDirection={sortDirection}
                   onSort={handleSort}
@@ -403,6 +430,7 @@ export function MarketDashboard() {
                           <MarketTable
                             rows={rows}
                             positions={positions}
+                            coinDecimalsMap={decimalsMap}
                             sortKey={sortKey}
                             sortDirection={sortDirection}
                             onSort={handleSort}
@@ -432,6 +460,7 @@ export function MarketDashboard() {
                           <MarketTable
                             rows={rows}
                             positions={positions}
+                            coinDecimalsMap={decimalsMap}
                             sortKey={sortKey}
                             sortDirection={sortDirection}
                             onSort={handleSort}
