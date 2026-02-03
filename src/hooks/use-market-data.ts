@@ -1,4 +1,5 @@
 import * as React from "react"
+import { useQueries, useQueryClient } from "@tanstack/react-query"
 
 import {
   supportedProtocols,
@@ -17,6 +18,8 @@ type MarketDataState = {
   updatedAt: Date | null
   refresh: () => void
   isLoading: boolean
+  marketErrorProtocols: Protocol[]
+  userErrorProtocols: Protocol[]
 }
 
 export function useMarketData(address?: string | null): MarketDataState {
@@ -24,14 +27,7 @@ export function useMarketData(address?: string | null): MarketDataState {
   const [positions, setPositions] = React.useState<WalletPositions>({})
   const [rewardSummary, setRewardSummary] = React.useState<RewardSummaryItem[]>([])
   const [updatedAt, setUpdatedAt] = React.useState<Date | null>(null)
-  const [isLoading, setIsLoading] = React.useState(false)
-  const isRefreshing = React.useRef(false)
-  const marketRefreshing = React.useRef<Record<Protocol, boolean>>({
-    Scallop: false,
-    Navi: false,
-    Suilend: false,
-    AlphaLend: false,
-  })
+  const queryClient = useQueryClient()
   const lastRowsRef = React.useRef<MarketRow[]>([])
   const positionsByProtocolRef = React.useRef<Record<Protocol, WalletPositions>>({
     Scallop: {},
@@ -47,6 +43,8 @@ export function useMarketData(address?: string | null): MarketDataState {
     Suilend: null,
     AlphaLend: null,
   })
+  const lastMarketSignatureRef = React.useRef<string>("")
+  const lastUserSignatureRef = React.useRef<string>("")
 
   const mergeRows = React.useCallback((nextRows: MarketRow[]) => {
     const nextByKey = new Map(
@@ -68,6 +66,53 @@ export function useMarketData(address?: string | null): MarketDataState {
     lastRowsRef.current = merged
     return merged
   }, [])
+
+  const roundValue = React.useCallback((value: number, digits: number) => {
+    const base = 10 ** digits
+    return Math.round(value * base) / base
+  }, [])
+
+  const buildMarketSignature = React.useCallback(
+    (nextRows: MarketRow[]) => {
+      const lines = nextRows
+        .map((row) => {
+          const key = `${row.protocol}-${row.asset}`
+          const values = [
+            roundValue(row.supplyApr, 6),
+            roundValue(row.borrowApr, 6),
+            roundValue(row.utilization, 6),
+            roundValue(row.supplyBaseApr, 6),
+            roundValue(row.borrowBaseApr, 6),
+            roundValue(row.supplyIncentiveApr, 6),
+            roundValue(row.borrowIncentiveApr, 6),
+          ]
+          return `${key}:${values.join(",")}`
+        })
+        .sort()
+      return lines.join("|")
+    },
+    [roundValue]
+  )
+
+  const buildUserSignature = React.useCallback(
+    (nextPositions: WalletPositions) => {
+      const positionLines = Object.entries(nextPositions)
+        .map(([key, amount]) => `${key}:${roundValue(amount, 8)}`)
+        .sort()
+      const rewardLines = supportedProtocols.flatMap((protocol) => {
+        const summary = summaryByProtocolRef.current[protocol]
+        if (!summary) return []
+        return summary.rewards
+          .map((reward) => {
+            const key = reward.coinType ?? reward.token
+            return `${protocol}:${key}:${roundValue(reward.amount, 8)}`
+          })
+          .sort()
+      })
+      return `${positionLines.join("|")}#${rewardLines.join("|")}`
+    },
+    [roundValue]
+  )
 
   const mergePositions = React.useCallback((all: WalletPositions[]) => {
     return all.reduce<WalletPositions>((acc, positions) => {
@@ -147,88 +192,101 @@ export function useMarketData(address?: string | null): MarketDataState {
     [address]
   )
 
-  const refreshMarketProtocol = React.useCallback(
-    async (protocol: Protocol) => {
-      if (marketRefreshing.current[protocol]) return
-      marketRefreshing.current[protocol] = true
-      try {
-        const snapshot = await fetchMarketOnly(protocol)
-        setRows(mergeRows(snapshot.rows))
-        setUpdatedAt(new Date())
-      } finally {
-        marketRefreshing.current[protocol] = false
-      }
-    },
-    [fetchMarketOnly, mergeRows]
+  const marketIntervals = React.useMemo(
+    () => ({
+      Scallop: 5,
+      Navi: 7,
+      Suilend: 11,
+      AlphaLend: 13,
+    }),
+    []
+  )
+  const marketQueries = useQueries({
+    queries: supportedProtocols.map((protocol) => ({
+      queryKey: ["market", protocol],
+      queryFn: () => fetchMarketOnly(protocol),
+      refetchInterval: marketIntervals[protocol] * 1000,
+      staleTime: marketIntervals[protocol] * 1000,
+      refetchIntervalInBackground: false,
+    })),
+  })
+  const userQueries = useQueries({
+    queries: supportedProtocols.map((protocol) => ({
+      queryKey: ["user", protocol, address],
+      queryFn: () => fetchUserOnly(protocol),
+      enabled: Boolean(address),
+      refetchInterval: 15000,
+      staleTime: 15000,
+      refetchIntervalInBackground: false,
+    })),
+  })
+  const isLoading =
+    marketQueries.some((query) => query.isLoading || query.isFetching)
+    || userQueries.some((query) => query.isLoading || query.isFetching)
+  const marketErrorProtocols = supportedProtocols.filter((_, index) =>
+    Boolean(marketQueries[index]?.error)
+  )
+  const userErrorProtocols = supportedProtocols.filter((_, index) =>
+    Boolean(userQueries[index]?.error)
   )
 
-  const refreshAllMarkets = React.useCallback(() => {
-    return Promise.allSettled(
-      supportedProtocols.map((protocol) => fetchMarketOnly(protocol))
-    ).then((results) => {
-      const mergedRows: MarketRow[] = []
-      results.forEach((result) => {
-        if (result.status !== "fulfilled") return
-        mergedRows.push(...result.value.rows)
-      })
-      setRows(mergeRows(mergedRows))
-      setUpdatedAt(new Date())
+  React.useEffect(() => {
+    const mergedRows: MarketRow[] = []
+    marketQueries.forEach((query) => {
+      if (!query.data?.rows?.length) return
+      mergedRows.push(...query.data.rows)
     })
-  }, [fetchMarketOnly, mergeRows])
+    if (!mergedRows.length) return
+    const nextRows = mergeRows(mergedRows)
+    const signature = buildMarketSignature(nextRows)
+    if (signature !== lastMarketSignatureRef.current) {
+      lastMarketSignatureRef.current = signature
+      setRows(nextRows)
+      setUpdatedAt(new Date())
+    }
+  }, [buildMarketSignature, marketQueries, mergeRows])
 
-  const refreshAllUsers = React.useCallback(() => {
-    return Promise.allSettled(
-      supportedProtocols.map((protocol) => fetchUserOnly(protocol))
-    ).then((results) => {
-      results.forEach((result, index) => {
-        if (result.status !== "fulfilled") return
-        const protocol = supportedProtocols[index]
-        positionsByProtocolRef.current[protocol] = result.value.positions
-        if (result.value.rewardSummary) {
-          summaryByProtocolRef.current[protocol] = result.value.rewardSummary
-        }
-      })
-      const nextPositions = mergePositions(
-        Object.values(positionsByProtocolRef.current)
-      )
+  React.useEffect(() => {
+    let hasUserData = false
+    userQueries.forEach((query, index) => {
+      if (!query.data) return
+      hasUserData = true
+      const protocol = supportedProtocols[index]
+      positionsByProtocolRef.current[protocol] = query.data.positions
+      if (query.data.rewardSummary) {
+        summaryByProtocolRef.current[protocol] = query.data.rewardSummary
+      }
+    })
+    if (!hasUserData) return
+    const nextPositions = mergePositions(
+      Object.values(positionsByProtocolRef.current)
+    )
+    const signature = buildUserSignature(nextPositions)
+    if (signature !== lastUserSignatureRef.current) {
+      lastUserSignatureRef.current = signature
       setPositions(nextPositions)
       setRewardSummary(buildSummary(nextPositions))
       setUpdatedAt(new Date())
-    })
-  }, [buildSummary, fetchUserOnly, mergePositions])
+    }
+  }, [buildSummary, buildUserSignature, mergePositions, userQueries])
 
   const refreshAll = React.useCallback(() => {
-    if (isRefreshing.current) return
-    isRefreshing.current = true
-    setIsLoading(true)
-    Promise.all([refreshAllMarkets(), refreshAllUsers()])
-      .finally(() => {
-        isRefreshing.current = false
-        setIsLoading(false)
-      })
-  }, [refreshAllMarkets, refreshAllUsers])
+    queryClient.invalidateQueries({ queryKey: ["market"] })
+    queryClient.invalidateQueries({ queryKey: ["user"] })
+  }, [queryClient])
 
   React.useEffect(() => {
     refreshAll()
-    const intervals: number[] = []
-    const scheduleMarket = (protocol: Protocol, intervalSeconds: number) => {
-      const intervalId = window.setInterval(() => {
-        refreshMarketProtocol(protocol)
-      }, intervalSeconds * 1000)
-      intervals.push(intervalId)
-    }
-    scheduleMarket("Scallop", 5)
-    scheduleMarket("Navi", 7)
-    scheduleMarket("Suilend", 11)
-    scheduleMarket("AlphaLend", 13)
-    const userInterval = window.setInterval(() => {
-      refreshAllUsers()
-    }, 15000)
-    intervals.push(userInterval)
-    return () => {
-      intervals.forEach((id) => window.clearInterval(id))
-    }
-  }, [refreshAll, refreshAllUsers, refreshMarketProtocol])
+  }, [refreshAll])
 
-  return { rows, positions, rewardSummary, updatedAt, refresh: refreshAll, isLoading }
+  return {
+    rows,
+    positions,
+    rewardSummary,
+    updatedAt,
+    refresh: refreshAll,
+    isLoading,
+    marketErrorProtocols,
+    userErrorProtocols,
+  }
 }

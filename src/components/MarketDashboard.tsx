@@ -95,9 +95,16 @@ export function MarketDashboard() {
   }, [])
   const displayAddress = previewAddress ?? account?.address
   const showClaimActions = Boolean(account?.address) && !previewAddress
-  const { rows, updatedAt, refresh, positions, rewardSummary, isLoading } = useMarketData(
-    displayAddress
-  )
+  const {
+    rows,
+    updatedAt,
+    refresh,
+    positions,
+    rewardSummary,
+    isLoading,
+    marketErrorProtocols,
+    userErrorProtocols,
+  } = useMarketData(displayAddress)
 
   const {
     filters,
@@ -228,6 +235,14 @@ export function MarketDashboard() {
     amount,
   }))
   const totalRewardList = Array.from(totalRewards.values())
+  const errorMessages = [
+    marketErrorProtocols.length
+      ? `Market data failed: ${marketErrorProtocols.join(", ")}`
+      : null,
+    userErrorProtocols.length
+      ? `Reward data failed: ${userErrorProtocols.join(", ")}`
+      : null,
+  ].filter(Boolean) as string[]
 
   const {
     claimError,
@@ -270,6 +285,11 @@ export function MarketDashboard() {
                 Refresh
               </Button>
             </div>
+            {errorMessages.length ? (
+              <div className="text-xs text-destructive">
+                {errorMessages.join(" · ")}
+              </div>
+            ) : null}
           </div>
         </CardHeader>
         <CardContent className="grid gap-4 overflow-visible">

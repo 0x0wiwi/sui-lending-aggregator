@@ -7,12 +7,9 @@ import {
 import { Transaction, type TransactionObjectArgument } from "@mysten/sui/transactions"
 import BN from "bn.js"
 import BigNumber from "bignumber.js"
+import type { AggregatorClient } from "@cetusprotocol/aggregator-sdk"
 
 import type { Protocol, RewardSummaryItem } from "@/lib/market-data"
-import {
-  CETUS_SLIPPAGE,
-  createAggregatorClient,
-} from "@/lib/cetus-aggregator"
 import { formatTokenSymbol } from "@/lib/market-fetch/utils"
 import { hasClaimableRewards, normalizeRewards } from "@/lib/reward-utils"
 import type { ClaimResult } from "@/hooks/claim/claim-builders"
@@ -21,6 +18,7 @@ import {
   toAtomicAmount,
 } from "@/hooks/claim/swap-helpers"
 
+const CETUS_SLIPPAGE = 0.001
 type UseClaimRewardsArgs = {
   summaryRows: RewardSummaryItem[]
   showClaimActions: boolean
@@ -107,10 +105,31 @@ export function useClaimRewards({
     []
   )
 
-  const aggregatorClient = React.useMemo(() => {
-    if (!account?.address) return null
-    return createAggregatorClient(suiClient, account.address)
-  }, [account?.address, suiClient])
+  const [aggregatorClient, setAggregatorClient] =
+    React.useState<AggregatorClient | null>(null)
+  React.useEffect(() => {
+    let isActive = true
+    if (!showClaimActions || !swapEnabled || !account?.address) {
+      setAggregatorClient(null)
+      return () => {
+        isActive = false
+      }
+    }
+    import("@/lib/cetus-aggregator")
+      .then(({ createAggregatorClient }) => {
+        if (!isActive) return
+        setAggregatorClient(createAggregatorClient(suiClient, account.address))
+      })
+      .catch((error) => {
+        console.error("Load aggregator client failed:", error)
+        if (isActive) {
+          setAggregatorClient(null)
+        }
+      })
+    return () => {
+      isActive = false
+    }
+  }, [account?.address, showClaimActions, suiClient, swapEnabled])
 
   const toAtomicAmountWithDecimals = React.useCallback(
     (amount: number, coinType: string) =>
@@ -122,6 +141,20 @@ export function useClaimRewards({
     null
   )
   const [swapPreviewLoading, setSwapPreviewLoading] = React.useState(false)
+  const swapPreviewCacheRef = React.useRef<
+    Map<string, { value: Promise<{
+      items: Array<{
+        token: string
+        amount: number
+        coinType?: string
+        steps: Array<{ from: string; target: string; provider: string }>
+        estimatedOut?: string
+        note?: string
+      }>
+      targetSymbol: string
+      canSwapAll: boolean
+    } | null>; expiresAt: number }>
+  >(new Map())
 
   const claimBuilderDeps = React.useMemo(
     () => ({
@@ -244,9 +277,23 @@ export function useClaimRewards({
   ) => {
     if (!swapEnabled) return null
     if (!aggregatorClient) return null
+    const roundAmount = (value: number) => {
+      const base = 10 ** 8
+      return Math.round(value * base) / base
+    }
+    const rewardKey = rewards
+      .map((reward) => `${reward.coinType ?? reward.token}:${roundAmount(reward.amount)}`)
+      .sort()
+      .join(",")
+    const previewKey = `${swapTargetCoinType}|${rewardKey}`
+    const now = Date.now()
+    const cached = swapPreviewCacheRef.current.get(previewKey)
+    if (cached && cached.expiresAt > now) {
+      return cached.value
+    }
     setSwapPreviewLoading(true)
-    let canSwapAll = true
-    try {
+    const value = (async () => {
+      let canSwapAll = true
       const items: Array<{
         token: string
         amount: number
@@ -323,6 +370,13 @@ export function useClaimRewards({
         targetSymbol: swapTargetSymbol,
         canSwapAll,
       }
+    })()
+    swapPreviewCacheRef.current.set(previewKey, {
+      value,
+      expiresAt: now + 15000,
+    })
+    try {
+      return await value
     } finally {
       setSwapPreviewLoading(false)
     }
