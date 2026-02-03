@@ -191,7 +191,7 @@ export async function fetchSuilend(
         rewardPriceMap,
         obligationsResult.obligations
       )
-      const rewardTotals = new Map<string, number>()
+      const rewardTotals = new Map<string, { token: string; amount: number }>()
       const rewardAtomicTotals = new Map<string, BigNumber>()
       const claimRewards: Array<{
         reserveArrayIndex: bigint
@@ -207,10 +207,11 @@ export async function fetchSuilend(
             const claim = reward.obligationClaims?.[obligation.id]
             const amount = claim ? toNumber(claim.claimableAmount) : 0
             if (amount > 0) {
-              rewardTotals.set(
-                reward.stats.symbol,
-                (rewardTotals.get(reward.stats.symbol) ?? 0) + amount
-              )
+              const existing = rewardTotals.get(reward.stats.rewardCoinType)
+              rewardTotals.set(reward.stats.rewardCoinType, {
+                token: reward.stats.symbol,
+                amount: (existing?.amount ?? 0) + amount,
+              })
               const decimals = reward.stats.mintDecimals ?? 0
               const atomic = claim.claimableAmount
                 .multipliedBy(new BigNumber(10).pow(decimals))
@@ -240,10 +241,11 @@ export async function fetchSuilend(
             const claim = reward.obligationClaims?.[obligation.id]
             const amount = claim ? toNumber(claim.claimableAmount) : 0
             if (amount > 0) {
-              rewardTotals.set(
-                reward.stats.symbol,
-                (rewardTotals.get(reward.stats.symbol) ?? 0) + amount
-              )
+              const existing = rewardTotals.get(reward.stats.rewardCoinType)
+              rewardTotals.set(reward.stats.rewardCoinType, {
+                token: reward.stats.symbol,
+                amount: (existing?.amount ?? 0) + amount,
+              })
               const decimals = reward.stats.mintDecimals ?? 0
               const atomic = claim.claimableAmount
                 .multipliedBy(new BigNumber(10).pow(decimals))
@@ -272,7 +274,11 @@ export async function fetchSuilend(
         protocol: "Suilend",
         supplies: buildSupplyList(positions, "Suilend"),
         rewards: Array.from(rewardTotals.entries())
-          .map(([token, amount]) => ({ token, amount }))
+          .map(([coinType, reward]) => ({
+            token: reward.token,
+            amount: reward.amount,
+            coinType,
+          }))
           .filter((reward) => reward.amount > 0),
         claimMeta: claimRewards.length
           ? {

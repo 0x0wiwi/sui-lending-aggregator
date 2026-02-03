@@ -101,14 +101,18 @@ export async function fetchAlphaLend(
         }
         return acc
       }, {})
-      const rewardTotals = new Map<string, number>()
+      const rewardTotals = new Map<string, { token: string; amount: number }>()
       ;(portfolios ?? []).forEach((portfolio) => {
         const rewards = portfolio?.rewardsToClaim
         rewards?.forEach((reward) => {
           const token = formatTokenSymbol(reward.coinType)
           const amount = toNumber(reward.rewardAmount)
           if (amount > 0) {
-            rewardTotals.set(token, (rewardTotals.get(token) ?? 0) + amount)
+            const existing = rewardTotals.get(reward.coinType)
+            rewardTotals.set(reward.coinType, {
+              token,
+              amount: (existing?.amount ?? 0) + amount,
+            })
           }
         })
       })
@@ -116,7 +120,11 @@ export async function fetchAlphaLend(
         protocol: "AlphaLend",
         supplies: buildSupplyList(positions, "AlphaLend"),
         rewards: Array.from(rewardTotals.entries())
-          .map(([token, amount]) => ({ token, amount }))
+          .map(([coinType, reward]) => ({
+            token: reward.token,
+            amount: reward.amount,
+            coinType,
+          }))
           .filter((reward) => reward.amount > 0),
       }
     }

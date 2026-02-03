@@ -11,6 +11,7 @@ export type IncentiveBreakdown = {
 export type RewardTokenAmount = {
   token: string
   amount: number
+  coinType?: string
 }
 
 export type RewardSupply = {

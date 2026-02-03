@@ -21,9 +21,11 @@ type ScallopBorrowIncentiveReward = {
   apr: number
 }
 
-function normalizeRewardList(rewardMap: Map<string, number>) {
+function normalizeRewardList(
+  rewardMap: Map<string, { token: string; amount: number }>
+) {
   return Array.from(rewardMap.entries())
-    .map(([token, amount]) => ({ token, amount }))
+    .map(([coinType, reward]) => ({ ...reward, coinType }))
     .filter((reward) => reward.amount > 0)
 }
 
@@ -198,24 +200,30 @@ export async function fetchScallop(
         },
         []
       )
-      const rewardTotals = new Map<string, number>()
+      const rewardTotals = new Map<string, { token: string; amount: number }>()
       const pending = portfolio?.pendingRewards
       pending?.lendings?.forEach(
         (reward: { symbol?: string; coinType?: string; pendingRewardInCoin?: number }) => {
-          const token = reward.symbol ?? formatTokenSymbol(reward.coinType ?? "")
-          rewardTotals.set(
+          if (!reward.coinType) return
+          const token = reward.symbol ?? formatTokenSymbol(reward.coinType)
+          const amount = toNumber(reward.pendingRewardInCoin)
+          const existing = rewardTotals.get(reward.coinType)
+          rewardTotals.set(reward.coinType, {
             token,
-            (rewardTotals.get(token) ?? 0) + toNumber(reward.pendingRewardInCoin)
-          )
+            amount: (existing?.amount ?? 0) + amount,
+          })
         }
       )
       pending?.borrowIncentives?.forEach(
         (reward: { symbol?: string; coinType?: string; pendingRewardInCoin?: number }) => {
-          const token = reward.symbol ?? formatTokenSymbol(reward.coinType ?? "")
-          rewardTotals.set(
+          if (!reward.coinType) return
+          const token = reward.symbol ?? formatTokenSymbol(reward.coinType)
+          const amount = toNumber(reward.pendingRewardInCoin)
+          const existing = rewardTotals.get(reward.coinType)
+          rewardTotals.set(reward.coinType, {
             token,
-            (rewardTotals.get(token) ?? 0) + toNumber(reward.pendingRewardInCoin)
-          )
+            amount: (existing?.amount ?? 0) + amount,
+          })
         }
       )
       rewardSummary = {

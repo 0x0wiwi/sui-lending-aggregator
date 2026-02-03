@@ -1,4 +1,9 @@
-import { getLendingState, getPools, type Pool } from "@naviprotocol/lending"
+import {
+  getLendingState,
+  getPools,
+  getUserAvailableLendingRewards,
+  type Pool,
+} from "@naviprotocol/lending"
 
 import {
   assetTypeAddresses,
@@ -155,6 +160,28 @@ export async function fetchNavi(address?: string | null): Promise<MarketFetchRes
         protocol: "Navi",
         supplies: buildSupplyList(positions, "Navi"),
         rewards: [],
+      }
+      try {
+        const rewards = await getUserAvailableLendingRewards(address, { env: "prod" })
+        const rewardTotals = new Map<string, number>()
+        rewards
+          .filter((reward) => reward.userClaimableReward > 0)
+          .forEach((reward) => {
+            rewardTotals.set(
+              reward.rewardCoinType,
+              (rewardTotals.get(reward.rewardCoinType) ?? 0)
+                + toNumber(reward.userClaimableReward)
+            )
+          })
+        rewardSummary.rewards = Array.from(rewardTotals.entries())
+          .map(([coinType, amount]) => ({
+            token: formatTokenSymbol(coinType),
+            amount,
+            coinType,
+          }))
+          .filter((reward) => reward.amount > 0)
+      } catch (error) {
+        console.error("Navi reward fetch failed:", error)
       }
     }
 

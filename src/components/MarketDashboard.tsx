@@ -141,15 +141,26 @@ export function MarketDashboard() {
   const [swapTarget, setSwapTarget] = React.useState<string>(
     assetTypeAddresses.USDC
   )
+  const [swapEnabled, setSwapEnabled] = React.useState<boolean>(true)
   const swapTargetLabel =
     swapOptions.find((option) => option.coinType === swapTarget)?.label ?? "USDC"
   const swapTargetOptions = React.useMemo(
     () => swapOptions.map(({ label, coinType }) => ({ label, coinType })),
     []
   )
+  const rewardCoinTypes = React.useMemo(
+    () =>
+      rewardSummary.flatMap((item) =>
+        item.rewards.map((reward) => reward.coinType).filter(Boolean)
+      ) as string[],
+    [rewardSummary]
+  )
   const swapCoinTypes = React.useMemo(
-    () => swapOptions.map((option) => option.coinType),
-    []
+    () => Array.from(new Set([
+      ...swapOptions.map((option) => option.coinType),
+      ...rewardCoinTypes,
+    ])),
+    [rewardCoinTypes]
   )
   const decimalsMap = useCoinDecimals(swapCoinTypes)
   const swapTargetDecimals = decimalsMap[swapTarget] ?? null
@@ -243,7 +254,6 @@ export function MarketDashboard() {
   const summaryRows = supportedProtocols
     .map((protocol) => rewardSummary.find((item) => item.protocol === protocol))
     .filter((item): item is NonNullable<typeof item> => Boolean(item))
-
   const totalSupplies = summaryRows.reduce<Record<string, number>>(
     (acc, item) => {
       item.supplies.forEach((supply) => {
@@ -253,20 +263,25 @@ export function MarketDashboard() {
     },
     {}
   )
-  const totalRewards = summaryRows.reduce<Record<string, number>>((acc, item) => {
+  const totalRewards = summaryRows.reduce<
+    Map<string, { token: string; amount: number; coinType?: string }>
+  >((acc, item) => {
     item.rewards.forEach((reward) => {
-      acc[reward.token] = (acc[reward.token] ?? 0) + reward.amount
+      const key = reward.coinType ?? reward.token
+      const existing = acc.get(key)
+      acc.set(key, {
+        token: reward.token,
+        coinType: reward.coinType,
+        amount: (existing?.amount ?? 0) + reward.amount,
+      })
     })
     return acc
-  }, {})
+  }, new Map())
   const totalSupplyList = Object.entries(totalSupplies).map(([asset, amount]) => ({
     asset,
     amount,
   }))
-  const totalRewardList = Object.entries(totalRewards).map(([token, amount]) => ({
-    token,
-    amount,
-  }))
+  const totalRewardList = Array.from(totalRewards.values())
 
   const {
     claimError,
@@ -275,7 +290,9 @@ export function MarketDashboard() {
     handleClaimProtocol,
     hasAnyClaim,
     isProtocolClaimSupported,
-    swapEstimateLabel,
+    getSwapPreview,
+    swapPreviewLoading,
+    swapAvailable,
   } = useClaimRewards({
     summaryRows,
     showClaimActions,
@@ -283,6 +300,8 @@ export function MarketDashboard() {
     swapTargetCoinType: swapTarget,
     swapTargetDecimals,
     swapTargetSymbol: swapTargetLabel,
+    swapEnabled,
+    coinDecimalsMap: decimalsMap,
   })
 
   return (
@@ -324,7 +343,11 @@ export function MarketDashboard() {
             swapTargetOptions={swapTargetOptions}
             onSwapTargetChange={setSwapTarget}
             slippageLabel={swapSlippageLabel}
-            swapEstimateLabel={swapEstimateLabel}
+            swapEnabled={swapEnabled}
+            onSwapEnabledChange={setSwapEnabled}
+            swapAvailable={swapAvailable}
+            onRequestSwapPreview={getSwapPreview}
+            swapPreviewLoading={swapPreviewLoading}
           />
           <MarketToolbar
             selectedAssets={filters.assets}
