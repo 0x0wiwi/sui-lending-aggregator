@@ -2,6 +2,7 @@ import { Button } from "@/components/ui/button"
 import type { Protocol, RewardSummaryItem } from "@/lib/market-data"
 import { hasClaimableRewards } from "@/lib/reward-utils"
 import { RewardSupplyList, RewardTokenList } from "@/components/reward-summary/RewardSummaryLists"
+import { cn } from "@/lib/utils"
 
 type RewardSummaryMobileProps = {
   summaryRows: RewardSummaryItem[]
@@ -40,12 +41,13 @@ export function RewardSummaryMobile({
     totalRewardList,
     coinDecimalsMap
   )
+  const mobileButtonClass = cn(actionButtonClass, "w-full")
 
   return (
     <div className="grid gap-2 md:hidden">
       {summaryRows.map((item) => (
         <div key={item.protocol} className="rounded-md border p-3">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col items-start gap-2">
             <div className="font-medium">{item.protocol}</div>
             {showClaimActions && (() => {
               const canClaim = hasClaimableRewards(item.rewards, coinDecimalsMap)
@@ -53,7 +55,7 @@ export function RewardSummaryMobile({
                 <Button
                   variant="outline"
                   size="sm"
-                  className={actionButtonClass}
+                  className={mobileButtonClass}
                   onClick={() => onClaim(item.protocol, item.rewards)}
                   disabled={
                     claimingProtocol !== null
@@ -97,13 +99,13 @@ export function RewardSummaryMobile({
         </div>
       ))}
       <div className="rounded-md border bg-muted/30 p-3">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col items-start gap-2">
           <div className="font-medium">Total</div>
           {showClaimActions && (
             <Button
               variant="secondary"
               size="sm"
-              className={actionButtonClass}
+              className={mobileButtonClass}
               onClick={onClaimAll}
               disabled={
                 claimingProtocol !== null
