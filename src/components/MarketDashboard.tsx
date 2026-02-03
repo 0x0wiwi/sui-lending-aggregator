@@ -1,5 +1,4 @@
 import * as React from "react"
-import BigNumber from "bignumber.js"
 import { RefreshCcwIcon } from "lucide-react"
 import { useCurrentAccount } from "@mysten/dapp-kit"
 
@@ -11,23 +10,16 @@ import { RewardSummaryCard } from "@/components/RewardSummaryCard"
 import { useClaimRewards } from "@/hooks/use-claim-rewards"
 import { useCoinDecimals } from "@/hooks/use-coin-decimals"
 import { useMarketData } from "@/hooks/use-market-data"
+import { useMarketFilters } from "@/hooks/use-market-filters"
 import {
   assetTypeAddresses,
   supportedAssets,
   supportedProtocols,
   type MarketRow,
 } from "@/lib/market-data"
+import { normalizeRewards } from "@/lib/reward-utils"
 
-type FilterState = {
-  assets: string[]
-  protocols: string[]
-  onlyIncentive: boolean
-  onlyPosition: boolean
-}
-
-type ViewMode = "mixed" | "byAsset" | "byProtocol"
-
-const defaultFilters: FilterState = {
+const defaultFilters = {
   assets: [],
   protocols: [],
   onlyIncentive: false,
@@ -101,43 +93,23 @@ export function MarketDashboard() {
     displayAddress
   )
 
-  const [filters, setFilters] = React.useState<FilterState>(() => {
-    if (typeof window === "undefined") return defaultFilters
-    const stored = window.localStorage.getItem(filterStorageKey)
-    if (!stored) return defaultFilters
-    try {
-      const parsed = JSON.parse(stored) as FilterState
-      return {
-        assets: Array.isArray(parsed.assets) ? parsed.assets : [],
-        protocols: Array.isArray(parsed.protocols) ? parsed.protocols : [],
-        onlyIncentive: Boolean(parsed.onlyIncentive),
-        onlyPosition: Boolean(parsed.onlyPosition),
-      }
-    } catch {
-      return defaultFilters
-    }
-  })
-  const [sortKey, setSortKey] = React.useState<SortKey>(() => {
-    if (typeof window === "undefined") return "asset"
-    const stored = window.localStorage.getItem(sortStorageKey)
-    if (!stored) return "asset"
-    try {
-      const parsed = JSON.parse(stored) as { key?: SortKey }
-      return parsed.key ?? "asset"
-    } catch {
-      return "asset"
-    }
-  })
-  const [sortDirection, setSortDirection] = React.useState<SortDirection>(() => {
-    if (typeof window === "undefined") return "asc"
-    const stored = window.localStorage.getItem(sortStorageKey)
-    if (!stored) return "asc"
-    try {
-      const parsed = JSON.parse(stored) as { direction?: SortDirection }
-      return parsed.direction ?? "asc"
-    } catch {
-      return "asc"
-    }
+  const {
+    filters,
+    viewMode,
+    sortKey,
+    sortDirection,
+    setViewMode,
+    handleSort,
+    handleToggleAsset,
+    handleToggleProtocol,
+    handleToggleIncentive,
+    handleTogglePosition,
+    handleClearFilters,
+  } = useMarketFilters({
+    defaultFilters,
+    filterStorageKey,
+    viewStorageKey,
+    sortStorageKey,
   })
   const [swapTarget, setSwapTarget] = React.useState<string>(
     assetTypeAddresses.USDC
@@ -165,68 +137,6 @@ export function MarketDashboard() {
   )
   const decimalsMap = useCoinDecimals(swapCoinTypes)
   const swapTargetDecimals = decimalsMap[swapTarget] ?? null
-  const [viewMode, setViewMode] = React.useState<ViewMode>(() => {
-    if (typeof window === "undefined") return "mixed"
-    const stored = window.localStorage.getItem(viewStorageKey)
-    return stored === "byAsset" || stored === "byProtocol" ? stored : "mixed"
-  })
-
-  React.useEffect(() => {
-    if (typeof window === "undefined") return
-    window.localStorage.setItem(filterStorageKey, JSON.stringify(filters))
-  }, [filters])
-
-  React.useEffect(() => {
-    if (typeof window === "undefined") return
-    window.localStorage.setItem(viewStorageKey, viewMode)
-  }, [viewMode])
-
-  React.useEffect(() => {
-    if (typeof window === "undefined") return
-    window.localStorage.setItem(
-      sortStorageKey,
-      JSON.stringify({ key: sortKey, direction: sortDirection })
-    )
-  }, [sortKey, sortDirection])
-
-  const handleSort = (key: SortKey) => {
-    if (key === sortKey) {
-      setSortDirection((prev) => (prev === "asc" ? "desc" : "asc"))
-      return
-    }
-    setSortKey(key)
-    setSortDirection("desc")
-  }
-
-  const handleToggleAsset = (asset: string) => {
-    setFilters((prev) => {
-      const exists = prev.assets.includes(asset)
-      return {
-        ...prev,
-        assets: exists
-          ? prev.assets.filter((item) => item !== asset)
-          : [...prev.assets, asset],
-      }
-    })
-  }
-
-  const handleToggleProtocol = (protocol: string) => {
-    setFilters((prev) => {
-      const exists = prev.protocols.includes(protocol)
-      return {
-        ...prev,
-        protocols: exists
-          ? prev.protocols.filter((item) => item !== protocol)
-          : [...prev.protocols, protocol],
-      }
-    })
-  }
-
-  const handleClearFilters = () => {
-    setFilters(defaultFilters)
-    setViewMode("mixed")
-  }
-
   const filteredRows = rows
     .filter((row) =>
       filters.assets.length ? filters.assets.includes(row.asset) : true
@@ -252,27 +162,13 @@ export function MarketDashboard() {
   const assetGroups = supportedAssets.filter((asset) =>
     filteredRows.some((row) => row.asset === asset)
   )
-  const normalizeRewardAmount = React.useCallback(
-    (amount: number, coinType?: string) => {
-      if (!coinType) return amount
-      const decimals = decimalsMap[coinType]
-      if (decimals === undefined) return amount
-      return Number(
-        new BigNumber(amount).toFixed(decimals, BigNumber.ROUND_FLOOR)
-      )
-    },
-    [decimalsMap]
-  )
   const normalizedRewardSummary = React.useMemo(
     () =>
       rewardSummary.map((item) => ({
         ...item,
-        rewards: item.rewards.map((reward) => ({
-          ...reward,
-          amount: normalizeRewardAmount(reward.amount, reward.coinType),
-        })),
+        rewards: normalizeRewards(item.rewards, decimalsMap),
       })),
-    [normalizeRewardAmount, rewardSummary]
+    [decimalsMap, rewardSummary]
   )
   const summaryRows = supportedProtocols
     .map((protocol) =>
@@ -383,18 +279,8 @@ export function MarketDashboard() {
             viewMode={viewMode}
             onToggleAsset={handleToggleAsset}
             onToggleProtocol={handleToggleProtocol}
-            onToggleIncentive={() =>
-              setFilters((prev) => ({
-                ...prev,
-                onlyIncentive: !prev.onlyIncentive,
-              }))
-            }
-            onTogglePosition={() =>
-              setFilters((prev) => ({
-                ...prev,
-                onlyPosition: !prev.onlyPosition,
-              }))
-            }
+            onToggleIncentive={handleToggleIncentive}
+            onTogglePosition={handleTogglePosition}
             onChangeView={setViewMode}
             onClearFilters={handleClearFilters}
           />

@@ -65,3 +65,12 @@
 - 每完成一個主要功能後需進行 code review，確保符合團隊標準。
 - 目前不需實作單元測試，使用手動測試即可。
 - 上述流程通過後需 `git commit`，並使用清楚的訊息，如 `feat: add user authentication feature` 或 `fix: resolve issue with data fetching`。
+
+## Claim 與 Swap（PTB 整合）
+- 目前四個協議（Scallop、Navi、Suilend、AlphaLend）皆使用 **單一 PTB** 完成 claim；claim + swap 也能在 **同一筆 PTB** 內串接完成。
+- 交換流程以聚合器（Cetus）進行，若無路由或數量過小，則視為不可 swap，但不影響 claim 本身的 PTB 組合能力。
+
+## 小數點與數量處理
+- 所有幣種小數位數以鏈上 `getCoinMetadata` 的 `decimals` 為準。
+- 顯示與 swap/claim 計算都使用 **截斷（ROUND_FLOOR）**，避免超出鏈上可表示的精度。
+- 任何換算後的原子量為 0 的數量，視為不可 claim / swap，需在 UI 與交易組合時過濾。
