@@ -15,7 +15,7 @@ import {
 } from "@/lib/cetus-aggregator"
 import { formatTokenSymbol } from "@/lib/market-fetch/utils"
 import { hasClaimableRewards, normalizeRewards } from "@/lib/reward-utils"
-import { createClaimBuilders } from "@/hooks/claim/claim-builders"
+import type { ClaimResult } from "@/hooks/claim/claim-builders"
 import {
   formatAtomicAmount,
   toAtomicAmount,
@@ -32,6 +32,12 @@ type UseClaimRewardsArgs = {
   coinDecimalsMap: Record<string, number>
 }
 
+type ClaimBuilders = {
+  appendAlphaLendClaim: (tx: Transaction) => Promise<ClaimResult>
+  appendNaviClaim: (tx: Transaction) => Promise<ClaimResult>
+  appendScallopClaim: (tx: Transaction) => Promise<ClaimResult>
+  appendSuilendClaim: (tx: Transaction) => Promise<ClaimResult>
+}
 
 export function useClaimRewards({
   summaryRows,
@@ -116,6 +122,47 @@ export function useClaimRewards({
     null
   )
   const [swapPreviewLoading, setSwapPreviewLoading] = React.useState(false)
+
+  const claimBuilderDeps = React.useMemo(
+    () => ({
+      accountAddress: account?.address,
+      suiClient,
+      getRewardsForProtocol,
+      hasSuilendClaim,
+      hasAlphaClaim,
+      suilendClaimRewards,
+      toAtomicAmount: toAtomicAmountWithDecimals,
+    }),
+    [
+      account?.address,
+      getRewardsForProtocol,
+      hasAlphaClaim,
+      hasSuilendClaim,
+      suilendClaimRewards,
+      suiClient,
+      toAtomicAmountWithDecimals,
+    ]
+  )
+  const claimBuildersRef = React.useRef<Promise<ClaimBuilders> | null>(null)
+  React.useEffect(() => {
+    claimBuildersRef.current = null
+  }, [
+    claimBuilderDeps.accountAddress,
+    claimBuilderDeps.getRewardsForProtocol,
+    claimBuilderDeps.hasAlphaClaim,
+    claimBuilderDeps.hasSuilendClaim,
+    claimBuilderDeps.suilendClaimRewards,
+    claimBuilderDeps.suiClient,
+    claimBuilderDeps.toAtomicAmount,
+  ])
+  const getClaimBuilders = React.useCallback(() => {
+    if (!claimBuildersRef.current) {
+      claimBuildersRef.current = import("@/hooks/claim/claim-builders").then(
+        ({ createClaimBuilders }) => createClaimBuilders(claimBuilderDeps)
+      )
+    }
+    return claimBuildersRef.current
+  }, [claimBuilderDeps])
 
   React.useEffect(() => {
     if (!showClaimActions) {
@@ -351,34 +398,6 @@ export function useClaimRewards({
     [account?.address, aggregatorClient, swapTargetCoinType]
   )
 
-  const claimBuilders = React.useMemo(
-    () =>
-      createClaimBuilders({
-        accountAddress: account?.address,
-        suiClient,
-        getRewardsForProtocol,
-        hasSuilendClaim,
-        hasAlphaClaim,
-        suilendClaimRewards,
-        toAtomicAmount: toAtomicAmountWithDecimals,
-      }),
-    [
-      account?.address,
-      getRewardsForProtocol,
-      hasAlphaClaim,
-      hasSuilendClaim,
-      suilendClaimRewards,
-      suiClient,
-      toAtomicAmountWithDecimals,
-    ]
-  )
-  const {
-    appendAlphaLendClaim,
-    appendNaviClaim,
-    appendScallopClaim,
-    appendSuilendClaim,
-  } = claimBuilders
-
   const transferClaimedCoins = React.useCallback(
     (tx: Transaction, inputs: Array<{ coin: TransactionObjectArgument }>) => {
       if (!account?.address) return
@@ -392,6 +411,12 @@ export function useClaimRewards({
   const buildProtocolTransaction = React.useCallback(
     async (protocol: Protocol) => {
       const tx = new Transaction()
+      const {
+        appendAlphaLendClaim,
+        appendNaviClaim,
+        appendScallopClaim,
+        appendSuilendClaim,
+      } = await getClaimBuilders()
       let inputs: Array<{
         coinType: string
         coin: TransactionObjectArgument
@@ -432,11 +457,8 @@ export function useClaimRewards({
       return tx
     },
     [
-      appendAlphaLendClaim,
-      appendNaviClaim,
-      appendScallopClaim,
-      appendSuilendClaim,
       buildSwapFromInputs,
+      getClaimBuilders,
       swapAvailable,
       swapEnabled,
       transferClaimedCoins,
@@ -445,6 +467,12 @@ export function useClaimRewards({
 
   const buildClaimAllTransaction = React.useCallback(async () => {
     const tx = new Transaction()
+    const {
+      appendAlphaLendClaim,
+      appendNaviClaim,
+      appendScallopClaim,
+      appendSuilendClaim,
+    } = await getClaimBuilders()
     const inputs: Array<{
       coinType: string
       coin: TransactionObjectArgument
@@ -485,11 +513,8 @@ export function useClaimRewards({
     transferClaimedCoins(tx, filteredInputs)
     return tx
   }, [
-    appendAlphaLendClaim,
-    appendNaviClaim,
-    appendScallopClaim,
-    appendSuilendClaim,
     buildSwapFromInputs,
+    getClaimBuilders,
     hasAlphaClaim,
     hasNaviClaim,
     hasScallopClaim,

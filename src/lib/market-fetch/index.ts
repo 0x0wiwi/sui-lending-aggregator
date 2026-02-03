@@ -1,9 +1,5 @@
 import { supportedProtocols, type RewardSummaryItem } from "@/lib/market-data"
 import type { WalletPositions } from "@/lib/positions"
-import { fetchAlphaLend } from "./alphalend"
-import { fetchNavi } from "./navi"
-import { fetchScallop } from "./scallop"
-import { fetchSuilend } from "./suilend"
 import type { MarketFetchResult, MarketSnapshot } from "./types"
 import { buildSupplyList } from "./utils"
 
@@ -22,10 +18,10 @@ export async function fetchMarketSnapshot(
   address?: string | null
 ): Promise<MarketSnapshot> {
   const results = await Promise.allSettled([
-    fetchScallop(address),
-    fetchNavi(address),
-    fetchSuilend(address),
-    fetchAlphaLend(address),
+    import("./scallop").then((module) => module.fetchScallop(address)),
+    import("./navi").then((module) => module.fetchNavi(address)),
+    import("./suilend").then((module) => module.fetchSuilend(address)),
+    import("./alphalend").then((module) => module.fetchAlphaLend(address)),
   ])
 
   const rows = results.flatMap((result) =>
