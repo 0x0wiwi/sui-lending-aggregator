@@ -5,7 +5,7 @@ import { ChevronDownIcon, ChevronUpIcon } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { assetTypeAddresses, type MarketRow } from "@/lib/market-data"
+import type { MarketRow } from "@/lib/market-data"
 import type { WalletPositions } from "@/lib/positions"
 import { cn } from "@/lib/utils"
 import { formatApr, renderAlignedPercent } from "@/components/market-table/formatters"
@@ -24,6 +24,7 @@ type MarketTableProps = {
   rows: MarketRow[]
   positions: WalletPositions
   coinDecimalsMap: Record<string, number>
+  assetCoinTypes: Record<string, string>
   sortKey: SortKey
   sortDirection: SortDirection
   onSort: (key: SortKey) => void
@@ -110,8 +111,7 @@ function AprCell({
   )
 }
 
-async function copyAssetAddress(asset: MarketRow["asset"]) {
-  const address = assetTypeAddresses[asset]
+async function copyAssetAddress(address?: string | null) {
   if (!address) return
   try {
     await navigator.clipboard.writeText(address)
@@ -157,20 +157,23 @@ export function MarketTable({
   sortDirection,
   onSort,
   coinDecimalsMap,
+  assetCoinTypes,
 }: MarketTableProps) {
-  const [copiedAsset, setCopiedAsset] = React.useState<MarketRow["asset"] | null>(null)
+  const [copiedAsset, setCopiedAsset] = React.useState<string | null>(null)
   const copyTimer = React.useRef<number | null>(null)
 
-  const handleCopy = React.useCallback(async (asset: MarketRow["asset"]) => {
-    await copyAssetAddress(asset)
-    setCopiedAsset(asset)
+  const handleCopy = React.useCallback(async (row: MarketRow) => {
+    const address = row.coinType ?? assetCoinTypes[row.asset]
+    const rowKey = `${row.protocol}-${row.asset}`
+    await copyAssetAddress(address)
+    setCopiedAsset(rowKey)
     if (copyTimer.current) {
       window.clearTimeout(copyTimer.current)
     }
     copyTimer.current = window.setTimeout(() => {
       setCopiedAsset(null)
     }, 1500)
-  }, [])
+  }, [assetCoinTypes])
 
   React.useEffect(() => {
     return () => {
@@ -181,9 +184,8 @@ export function MarketTable({
   }, [])
 
   const formatTokenAmount = React.useCallback(
-    (asset: MarketRow["asset"], amount: number | null) => {
+    (coinType: string | undefined, amount: number | null) => {
       if (amount === null) return "—"
-      const coinType = assetTypeAddresses[asset]
       const decimals = coinType ? coinDecimalsMap[coinType] : undefined
       const maxDigits =
         typeof decimals === "number" && Number.isFinite(decimals)
@@ -273,12 +275,12 @@ export function MarketTable({
                       <button
                         type="button"
                         className="cursor-pointer"
-                        onClick={() => handleCopy(row.asset)}
+                        onClick={() => handleCopy(row)}
                         title="Copy asset address"
                       >
                         <Badge variant="secondary">{row.asset}</Badge>
                       </button>
-                      {copiedAsset === row.asset ? (
+                      {copiedAsset === `${row.protocol}-${row.asset}` ? (
                         <span className="pointer-events-none absolute left-full ml-2 text-xs text-muted-foreground whitespace-nowrap">
                           Copied
                         </span>
@@ -310,7 +312,7 @@ export function MarketTable({
                     {renderAlignedPercent(row.utilization)}
                   </td>
                   <td className="px-3 py-3">
-                    {formatTokenAmount(row.asset, position)}
+                    {formatTokenAmount(row.coinType, position)}
                   </td>
                 </tr>
               )
@@ -334,12 +336,12 @@ export function MarketTable({
                     <button
                       type="button"
                       className="cursor-pointer"
-                      onClick={() => handleCopy(row.asset)}
+                      onClick={() => handleCopy(row)}
                       title="Copy asset address"
                     >
                       <Badge variant="secondary">{row.asset}</Badge>
                     </button>
-                    {copiedAsset === row.asset ? (
+                    {copiedAsset === `${row.protocol}-${row.asset}` ? (
                       <span className="pointer-events-none absolute left-full ml-2 text-xs text-muted-foreground whitespace-nowrap">
                         Copied
                       </span>
@@ -380,7 +382,7 @@ export function MarketTable({
                 <div className="flex items-center justify-between">
                   <span className="text-muted-foreground">Your Supply</span>
                   <span className={cn(!position && "text-muted-foreground")}>
-                    {formatTokenAmount(row.asset, position)}
+                    {formatTokenAmount(row.coinType, position)}
                   </span>
                 </div>
               </CardContent>

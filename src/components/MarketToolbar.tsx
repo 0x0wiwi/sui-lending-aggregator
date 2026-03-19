@@ -2,6 +2,7 @@ import { Button } from "@/components/ui/button"
 import { FiltersBar } from "@/components/FiltersBar"
 
 type MarketToolbarProps = {
+  assetOptions: string[]
   selectedAssets: string[]
   selectedProtocols: string[]
   onlyIncentive: boolean
@@ -16,6 +17,7 @@ type MarketToolbarProps = {
 }
 
 export function MarketToolbar({
+  assetOptions,
   selectedAssets,
   selectedProtocols,
   onlyIncentive,
@@ -38,6 +40,7 @@ export function MarketToolbar({
   return (
     <div className="flex flex-wrap items-center gap-3">
       <FiltersBar
+        assetOptions={assetOptions}
         selectedAssets={selectedAssets}
         selectedProtocols={selectedProtocols}
         onlyIncentive={onlyIncentive}

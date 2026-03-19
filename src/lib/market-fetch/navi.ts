@@ -19,6 +19,7 @@ import {
   formatTokenSymbol,
   sumBreakdown,
   toAssetSymbolFromSource,
+  toNormalizedCoinType,
   toNumber,
 } from "./utils"
 
@@ -50,24 +51,24 @@ export async function fetchNaviMarket(): Promise<MarketOnlyResult> {
         const token = pool.token as
           | { symbol?: string; address?: string; coinType?: string }
           | undefined
+        const poolCoinType = toNormalizedCoinType(token?.coinType ?? token?.address)
         const asset = toAssetSymbolFromSource(
           token?.symbol,
-          token?.address ?? token?.coinType
+          poolCoinType
         )
-        if (!asset) return acc
+        if (!asset || !poolCoinType) return acc
         const existing = acc[asset]
         if (!existing) {
           acc[asset] = pool
           return acc
         }
         const preferred = preferredCoinType[asset]
-        const isPreferred =
-          token?.address === preferred || token?.coinType === preferred
+        const isPreferred = poolCoinType === preferred
         const existingToken = existing.token as
           | { address?: string; coinType?: string }
           | undefined
         const existingPreferred =
-          existingToken?.address === preferred || existingToken?.coinType === preferred
+          toNormalizedCoinType(existingToken?.coinType ?? existingToken?.address) === preferred
         if (isPreferred && !existingPreferred) {
           acc[asset] = pool
           return acc
@@ -85,11 +86,12 @@ export async function fetchNaviMarket(): Promise<MarketOnlyResult> {
         const token = pool.token as
           | { symbol?: string; address?: string; coinType?: string }
           | undefined
+        const poolCoinType = toNormalizedCoinType(token?.coinType ?? token?.address)
         const asset = toAssetSymbolFromSource(
           token?.symbol,
-          token?.address ?? token?.coinType
+          poolCoinType
         )
-        if (!asset) return null
+        if (!asset || !poolCoinType) return null
         const supplyAprBase =
           toNumber(pool.supplyIncentiveApyInfo?.vaultApr)
           || toNumber(pool.currentSupplyRate) / 1e25
@@ -119,6 +121,7 @@ export async function fetchNaviMarket(): Promise<MarketOnlyResult> {
           || Math.max(borrowAprBase - borrowIncentiveTotal, 0)
         const row: MarketRow = {
           asset,
+          coinType: poolCoinType,
           protocol: "Navi",
           supplyApr: supplyNetApr,
           borrowApr: borrowNetApr,
@@ -154,9 +157,10 @@ export async function fetchNaviUser(address?: string | null): Promise<UserOnlyRe
       const token = state.pool?.token as
         | { symbol?: string; address?: string; coinType?: string }
         | undefined
+      const poolCoinType = toNormalizedCoinType(token?.coinType ?? token?.address)
       const asset = toAssetSymbolFromSource(
         token?.symbol,
-        token?.address ?? token?.coinType
+        poolCoinType
       )
       if (!asset) return acc
       const key = createPositionKey("Navi", asset)
@@ -164,11 +168,12 @@ export async function fetchNaviUser(address?: string | null): Promise<UserOnlyRe
       acc[key] = (acc[key] ?? 0) + amount
       return acc
     }, {})
-    rewardSummary = {
+    const nextRewardSummary: RewardSummaryItem = {
       protocol: "Navi",
       supplies: buildSupplyList(positions, "Navi"),
       rewards: [],
     }
+    rewardSummary = nextRewardSummary
     try {
       const rewards = await getUserAvailableLendingRewards(address, { env: "prod" })
       const rewardTotals = new Map<string, number>()
@@ -181,7 +186,7 @@ export async function fetchNaviUser(address?: string | null): Promise<UserOnlyRe
               + toNumber(reward.userClaimableReward)
           )
         })
-      rewardSummary.rewards = Array.from(rewardTotals.entries())
+      nextRewardSummary.rewards = Array.from(rewardTotals.entries())
         .map(([coinType, amount]) => ({
           token: formatTokenSymbol(coinType),
           amount,

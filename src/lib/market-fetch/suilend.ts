@@ -96,6 +96,7 @@ export async function fetchSuilendMarket(): Promise<MarketOnlyResult> {
 
     const selectedReserves = selectSuilendReserves(Object.values(reserveMap))
     const rows = Object.values(selectedReserves)
+      .filter((reserve): reserve is NonNullable<typeof reserve> => Boolean(reserve))
       .map((reserve) => {
         const asset = toAssetSymbolFromSource(
           reserve.token.symbol,
@@ -138,6 +139,7 @@ export async function fetchSuilendMarket(): Promise<MarketOnlyResult> {
         const borrowApr = Math.max(borrowBaseApr - borrowIncentiveApr, 0)
         const row: MarketRow = {
           asset,
+          coinType: reserve.coinType,
           protocol: "Suilend",
           supplyApr,
           borrowApr,

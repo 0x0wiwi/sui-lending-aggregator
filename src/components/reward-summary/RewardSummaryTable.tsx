@@ -8,6 +8,7 @@ type RewardSummaryTableProps = {
   totalSupplyList: { asset: string; amount: number }[]
   totalRewardList: RewardSummaryItem["rewards"]
   showClaimActions: boolean
+  assetCoinTypes: Record<string, string>
   claimError: string | null
   claimingProtocol: Protocol | "all" | null
   hasAnyClaim: boolean
@@ -25,6 +26,7 @@ export function RewardSummaryTable({
   totalSupplyList,
   totalRewardList,
   showClaimActions,
+  assetCoinTypes,
   claimError,
   claimingProtocol,
   hasAnyClaim,
@@ -65,7 +67,11 @@ export function RewardSummaryTable({
             <tr key={item.protocol} className="border-b last:border-b-0">
               <td className="px-2 py-1 font-medium">{item.protocol}</td>
               <td className="px-2 py-1 align-top whitespace-normal">
-                <RewardSupplyList supplies={item.supplies} decimalsMap={coinDecimalsMap} />
+                <RewardSupplyList
+                  supplies={item.supplies}
+                  decimalsMap={coinDecimalsMap}
+                  assetCoinTypes={assetCoinTypes}
+                />
               </td>
               <td className="px-2 py-1 align-top whitespace-normal">
                 <RewardTokenList rewards={item.rewards} decimalsMap={coinDecimalsMap} />
@@ -117,7 +123,11 @@ export function RewardSummaryTable({
           <tr className="border-t bg-muted/30">
             <td className="px-2 py-1 font-medium">Total</td>
             <td className="px-2 py-1 align-top whitespace-normal">
-              <RewardSupplyList supplies={totalSupplyList} decimalsMap={coinDecimalsMap} />
+              <RewardSupplyList
+                supplies={totalSupplyList}
+                decimalsMap={coinDecimalsMap}
+                assetCoinTypes={assetCoinTypes}
+              />
             </td>
             <td className="px-2 py-1 align-top whitespace-normal">
               <RewardTokenList rewards={totalRewardList} decimalsMap={coinDecimalsMap} />

@@ -1,9 +1,10 @@
-import { assetTypeAddresses, type RewardSummaryItem } from "@/lib/market-data"
+import type { RewardSummaryItem } from "@/lib/market-data"
 import { renderAlignedNumber } from "@/components/reward-summary/formatters"
 
 type RewardSupplyListProps = {
   supplies: { asset: string; amount: number }[]
   decimalsMap: Record<string, number>
+  assetCoinTypes: Record<string, string>
 }
 
 type RewardTokenListProps = {
@@ -11,7 +12,11 @@ type RewardTokenListProps = {
   decimalsMap: Record<string, number>
 }
 
-export function RewardSupplyList({ supplies, decimalsMap }: RewardSupplyListProps) {
+export function RewardSupplyList({
+  supplies,
+  decimalsMap,
+  assetCoinTypes,
+}: RewardSupplyListProps) {
   if (!supplies.length) return "—"
   return (
     <div className="grid gap-1">
@@ -24,9 +29,7 @@ export function RewardSupplyList({ supplies, decimalsMap }: RewardSupplyListProp
           <span>
             {renderAlignedNumber(
               item.amount,
-              decimalsMap[
-                assetTypeAddresses[item.asset as keyof typeof assetTypeAddresses]
-              ]
+              item.asset ? decimalsMap[assetCoinTypes[item.asset]] : undefined
             )}
           </span>
         </div>

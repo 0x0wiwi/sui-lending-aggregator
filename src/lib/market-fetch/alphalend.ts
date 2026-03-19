@@ -12,6 +12,7 @@ import {
   formatTokenSymbol,
   sumBreakdown,
   toAssetSymbolFromSource,
+  toNormalizedCoinType,
   toNumber,
 } from "./utils"
 
@@ -20,11 +21,16 @@ export async function fetchAlphaLendMarket(): Promise<MarketOnlyResult> {
     const suiClient = new SuiClient({ url: getFullnodeUrl("mainnet") })
     const alphalendClient = new AlphalendClient("mainnet", suiClient)
     const markets = await alphalendClient.getAllMarkets()
+    const coinMetadataMap = await alphalendClient.fetchCoinMetadataMap()
     const marketList = Array.isArray(markets) ? markets : []
     const rows = marketList
       .map((market) => {
-        const asset = toAssetSymbolFromSource(null, market.coinType)
-        if (!asset) return null
+        const coinType = toNormalizedCoinType(market.coinType)
+        const asset = toAssetSymbolFromSource(
+          coinMetadataMap.get(market.coinType)?.symbol ?? null,
+          coinType
+        )
+        if (!asset || !coinType) return null
         const supplyBaseApr = toNumber(market.supplyApr?.interestApr)
         const borrowBaseApr = toNumber(market.borrowApr?.interestApr)
         const supplyRewards = (market.supplyApr?.rewards ?? []) as Array<{
@@ -54,6 +60,7 @@ export async function fetchAlphaLendMarket(): Promise<MarketOnlyResult> {
         const utilization = toNumber((market as { utilizationRate?: unknown }).utilizationRate) * 100
         const row: MarketRow = {
           asset,
+          coinType,
           protocol: "AlphaLend",
           supplyApr,
           borrowApr,
@@ -89,6 +96,7 @@ export async function fetchAlphaLendUser(
     const suiClient = new SuiClient({ url: getFullnodeUrl("mainnet") })
     const alphalendClient = new AlphalendClient("mainnet", suiClient)
     const markets = await alphalendClient.getAllMarkets()
+    const coinMetadataMap = await alphalendClient.fetchCoinMetadataMap()
     const marketList = Array.isArray(markets) ? markets : []
     const marketById = new Map(
       marketList.map((market) => [String(market.marketId), market])
@@ -105,7 +113,10 @@ export async function fetchAlphaLendUser(
       for (const [marketId, amount] of suppliedAmounts.entries()) {
         const market = marketById.get(String(marketId))
         if (!market) continue
-        const asset = toAssetSymbolFromSource(null, market.coinType)
+        const asset = toAssetSymbolFromSource(
+          coinMetadataMap.get(market.coinType)?.symbol ?? null,
+          toNormalizedCoinType(market.coinType)
+        )
         if (!asset) continue
         const key = createPositionKey("AlphaLend", asset)
         acc[key] = (acc[key] ?? 0) + toNumber(amount)

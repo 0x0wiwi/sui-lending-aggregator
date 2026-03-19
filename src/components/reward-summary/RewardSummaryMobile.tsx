@@ -9,6 +9,7 @@ type RewardSummaryMobileProps = {
   totalSupplyList: { asset: string; amount: number }[]
   totalRewardList: RewardSummaryItem["rewards"]
   showClaimActions: boolean
+  assetCoinTypes: Record<string, string>
   claimError: string | null
   claimingProtocol: Protocol | "all" | null
   hasAnyClaim: boolean
@@ -26,6 +27,7 @@ export function RewardSummaryMobile({
   totalSupplyList,
   totalRewardList,
   showClaimActions,
+  assetCoinTypes,
   claimError,
   claimingProtocol,
   hasAnyClaim,
@@ -89,6 +91,7 @@ export function RewardSummaryMobile({
               <RewardSupplyList
                 supplies={item.supplies}
                 decimalsMap={coinDecimalsMap}
+                assetCoinTypes={assetCoinTypes}
               />
             </div>
             <div>
@@ -135,6 +138,7 @@ export function RewardSummaryMobile({
             <RewardSupplyList
               supplies={totalSupplyList}
               decimalsMap={coinDecimalsMap}
+              assetCoinTypes={assetCoinTypes}
             />
           </div>
           <div>

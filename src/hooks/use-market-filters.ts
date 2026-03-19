@@ -12,6 +12,7 @@ type ViewMode = "mixed" | "byAsset" | "byProtocol"
 
 type UseMarketFiltersArgs = {
   defaultFilters: FilterState
+  availableAssets: string[]
   filterStorageKey: string
   viewStorageKey: string
   sortStorageKey: string
@@ -19,6 +20,7 @@ type UseMarketFiltersArgs = {
 
 export function useMarketFilters({
   defaultFilters,
+  availableAssets,
   filterStorageKey,
   viewStorageKey,
   sortStorageKey,
@@ -82,6 +84,21 @@ export function useMarketFilters({
       JSON.stringify({ key: sortKey, direction: sortDirection })
     )
   }, [sortKey, sortDirection, sortStorageKey])
+
+  React.useEffect(() => {
+    if (!availableAssets.length) return
+    const availableAssetSet = new Set(availableAssets)
+    setFilters((prev) => {
+      const nextAssets = prev.assets.filter((asset) => availableAssetSet.has(asset))
+      if (nextAssets.length === prev.assets.length) {
+        return prev
+      }
+      return {
+        ...prev,
+        assets: nextAssets,
+      }
+    })
+  }, [availableAssets])
 
   const handleSort = (key: SortKey) => {
     if (key === sortKey) {

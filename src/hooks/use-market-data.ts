@@ -76,7 +76,7 @@ export function useMarketData(address?: string | null): MarketDataState {
     (nextRows: MarketRow[]) => {
       const lines = nextRows
         .map((row) => {
-          const key = `${row.protocol}-${row.asset}`
+          const key = `${row.protocol}-${row.asset}-${row.coinType}`
           const values = [
             roundValue(row.supplyApr, 6),
             roundValue(row.borrowApr, 6),
@@ -97,6 +97,7 @@ export function useMarketData(address?: string | null): MarketDataState {
   const buildUserSignature = React.useCallback(
     (nextPositions: WalletPositions) => {
       const positionLines = Object.entries(nextPositions)
+        .filter((entry): entry is [string, number] => typeof entry[1] === "number")
         .map(([key, amount]) => `${key}:${roundValue(amount, 8)}`)
         .sort()
       const rewardLines = supportedProtocols.flatMap((protocol) => {

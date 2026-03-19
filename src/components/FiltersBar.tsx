@@ -9,9 +9,10 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { supportedAssets, supportedProtocols } from "@/lib/market-data"
+import { supportedProtocols } from "@/lib/market-data"
 
 type FiltersBarProps = {
+  assetOptions: string[]
   selectedAssets: string[]
   selectedProtocols: string[]
   onlyIncentive: boolean
@@ -23,6 +24,7 @@ type FiltersBarProps = {
 }
 
 export function FiltersBar({
+  assetOptions,
   selectedAssets,
   selectedProtocols,
   onlyIncentive,
@@ -44,7 +46,7 @@ export function FiltersBar({
         <DropdownMenuContent align="start">
           <DropdownMenuLabel>Assets</DropdownMenuLabel>
           <DropdownMenuSeparator />
-          {supportedAssets.map((asset) => (
+          {assetOptions.map((asset) => (
             <DropdownMenuCheckboxItem
               key={asset}
               checked={selectedAssets.includes(asset)}

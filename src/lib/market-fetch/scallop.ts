@@ -13,6 +13,7 @@ import {
   formatTokenSymbol,
   sumBreakdown,
   toAssetSymbolFromSource,
+  toNormalizedCoinType,
   toNumber,
 } from "./utils"
 
@@ -100,12 +101,13 @@ export async function fetchScallopMarket(): Promise<MarketOnlyResult> {
   const selectedPools = pools.reduce<Partial<Record<AssetSymbol, MarketPool>>>(
     (acc, pool) => {
       if (!pool) return acc
-      const poolCoinType =
+      const poolCoinType = toNormalizedCoinType(
         (pool as { coinType?: string }).coinType
         ?? (pool as { marketCoinType?: string }).marketCoinType
         ?? null
+      )
       const asset = toAssetSymbolFromSource(pool.symbol, poolCoinType)
-      if (!asset) return acc
+      if (!asset || !poolCoinType) return acc
       const preferred = preferredCoinType[asset]
       const existing = acc[asset]
       if (!existing) {
@@ -132,12 +134,13 @@ export async function fetchScallopMarket(): Promise<MarketOnlyResult> {
   const rows = Object.values(selectedPools)
     .filter((pool): pool is MarketPool => Boolean(pool))
     .map((pool) => {
-      const poolCoinType =
+      const poolCoinType = toNormalizedCoinType(
         (pool as { coinType?: string }).coinType
         ?? (pool as { marketCoinType?: string }).marketCoinType
         ?? null
+      )
       const asset = toAssetSymbolFromSource(pool.symbol, poolCoinType)
-      if (!asset) return null
+      if (!asset || !poolCoinType) return null
       const spool = spools[pool.marketCoinType] ?? spools[pool.coinName]
       const supplyRewardApr = spool?.rewardApr ? spool.rewardApr * 100 : 0
       const supplyRewardToken = spool?.rewardCoinType
@@ -157,6 +160,7 @@ export async function fetchScallopMarket(): Promise<MarketOnlyResult> {
       const borrowApr = Math.max(borrowBaseApr - borrowIncentiveApr, 0)
       const row: MarketRow = {
         asset,
+        coinType: poolCoinType,
         protocol: "Scallop",
         supplyApr,
         borrowApr,

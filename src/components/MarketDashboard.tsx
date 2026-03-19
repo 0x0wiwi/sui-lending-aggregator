@@ -7,16 +7,17 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { MarketToolbar } from "@/components/MarketToolbar"
 import { MarketTable, type SortDirection, type SortKey } from "@/components/MarketTable"
 import { RewardSummaryCard } from "@/components/RewardSummaryCard"
+import { useAssetCatalog } from "@/hooks/use-asset-catalog"
 import { useClaimRewards } from "@/hooks/use-claim-rewards"
 import { useCoinDecimals } from "@/hooks/use-coin-decimals"
 import { useMarketData } from "@/hooks/use-market-data"
 import { useMarketFilters } from "@/hooks/use-market-filters"
 import {
   assetTypeAddresses,
-  supportedAssets,
   supportedProtocols,
   type MarketRow,
 } from "@/lib/market-data"
+import type { WalletPositions } from "@/lib/positions"
 import { normalizeRewards } from "@/lib/reward-utils"
 
 const defaultFilters = {
@@ -54,7 +55,7 @@ function sortRows(
   rows: MarketRow[],
   sortKey: SortKey,
   direction: SortDirection,
-  positions: Record<string, number>
+  positions: WalletPositions
 ) {
   const multiplier = direction === "asc" ? 1 : -1
   const sorted = [...rows].sort((a, b) => {
@@ -105,6 +106,7 @@ export function MarketDashboard() {
     marketErrorProtocols,
     userErrorProtocols,
   } = useMarketData(displayAddress)
+  const { assetOptions, assetCoinTypes } = useAssetCatalog(rows)
 
   const {
     filters,
@@ -120,6 +122,7 @@ export function MarketDashboard() {
     handleClearFilters,
   } = useMarketFilters({
     defaultFilters,
+    availableAssets: assetOptions,
     filterStorageKey,
     viewStorageKey,
     sortStorageKey,
@@ -163,9 +166,10 @@ export function MarketDashboard() {
     () => Array.from(new Set([
       ...swapOptions.map((option) => option.coinType),
       ...rewardCoinTypes,
-      ...supportedAssets.map((asset) => assetTypeAddresses[asset]),
+      ...Object.values(assetCoinTypes),
+      ...rows.map((row) => row.coinType),
     ])),
-    [rewardCoinTypes]
+    [assetCoinTypes, rewardCoinTypes, rows]
   )
   const decimalsMap = useCoinDecimals(swapCoinTypes)
   const swapTargetDecimals = decimalsMap[swapTarget] ?? null
@@ -191,7 +195,7 @@ export function MarketDashboard() {
   const protocolGroups = supportedProtocols.filter((protocol) =>
     filteredRows.some((row) => row.protocol === protocol)
   )
-  const assetGroups = supportedAssets.filter((asset) =>
+  const assetGroups = assetOptions.filter((asset) =>
     filteredRows.some((row) => row.asset === asset)
   )
   const normalizedRewardSummary = React.useMemo(
@@ -299,6 +303,7 @@ export function MarketDashboard() {
             totalSupplyList={totalSupplyList}
             totalRewardList={totalRewardList}
             showClaimActions={showClaimActions}
+            assetCoinTypes={assetCoinTypes}
             claimError={claimError}
             claimingProtocol={claimingProtocol}
             hasAnyClaim={hasAnyClaim}
@@ -317,6 +322,7 @@ export function MarketDashboard() {
             swapPreviewLoading={swapPreviewLoading}
           />
           <MarketToolbar
+            assetOptions={assetOptions}
             selectedAssets={filters.assets}
             selectedProtocols={filters.protocols}
             onlyIncentive={filters.onlyIncentive}
@@ -337,6 +343,7 @@ export function MarketDashboard() {
                   rows={sortedRows}
                   positions={positions}
                   coinDecimalsMap={decimalsMap}
+                  assetCoinTypes={assetCoinTypes}
                   sortKey={sortKey}
                   sortDirection={sortDirection}
                   onSort={handleSort}
@@ -362,6 +369,7 @@ export function MarketDashboard() {
                             rows={rows}
                             positions={positions}
                             coinDecimalsMap={decimalsMap}
+                            assetCoinTypes={assetCoinTypes}
                             sortKey={sortKey}
                             sortDirection={sortDirection}
                             onSort={handleSort}
@@ -392,6 +400,7 @@ export function MarketDashboard() {
                             rows={rows}
                             positions={positions}
                             coinDecimalsMap={decimalsMap}
+                            assetCoinTypes={assetCoinTypes}
                             sortKey={sortKey}
                             sortDirection={sortDirection}
                             onSort={handleSort}
