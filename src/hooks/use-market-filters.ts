@@ -18,6 +18,23 @@ type UseMarketFiltersArgs = {
   sortStorageKey: string
 }
 
+type StateUpdater<T> = T | ((previous: T) => T)
+type SortState = {
+  key: SortKey
+  direction: SortDirection
+}
+
+const defaultSortState: SortState = {
+  key: "asset",
+  direction: "asc",
+}
+
+function resolveNextState<T>(updater: StateUpdater<T>, previous: T) {
+  return typeof updater === "function"
+    ? (updater as (previous: T) => T)(previous)
+    : updater
+}
+
 export function useMarketFilters({
   defaultFilters,
   availableAssets,
@@ -44,51 +61,72 @@ export function useMarketFilters({
     const stored = window.localStorage.getItem(viewStorageKey)
     return stored === "byAsset" || stored === "byProtocol" ? stored : "mixed"
   })
-  const [sortKey, setSortKey] = React.useState<SortKey>(() => {
-    if (typeof window === "undefined") return "asset"
+  const [sortState, setSortState] = React.useState<SortState>(() => {
+    if (typeof window === "undefined") return defaultSortState
     const stored = window.localStorage.getItem(sortStorageKey)
-    if (!stored) return "asset"
+    if (!stored) return defaultSortState
     try {
-      const parsed = JSON.parse(stored) as { key?: SortKey }
-      return parsed.key ?? "asset"
+      const parsed = JSON.parse(stored) as {
+        key?: SortKey
+        direction?: SortDirection
+      }
+      return {
+        key: parsed.key ?? defaultSortState.key,
+        direction: parsed.direction ?? defaultSortState.direction,
+      }
     } catch {
-      return "asset"
+      return defaultSortState
     }
   })
-  const [sortDirection, setSortDirection] = React.useState<SortDirection>(() => {
-    if (typeof window === "undefined") return "asc"
-    const stored = window.localStorage.getItem(sortStorageKey)
-    if (!stored) return "asc"
-    try {
-      const parsed = JSON.parse(stored) as { direction?: SortDirection }
-      return parsed.direction ?? "asc"
-    } catch {
-      return "asc"
+  const sortKey = sortState.key
+  const sortDirection = sortState.direction
+  const filtersRef = React.useRef(filters)
+  const viewModeRef = React.useRef(viewMode)
+  const sortStateRef = React.useRef(sortState)
+
+  React.useEffect(() => {
+    filtersRef.current = filters
+  }, [filters])
+
+  React.useEffect(() => {
+    viewModeRef.current = viewMode
+  }, [viewMode])
+
+  React.useEffect(() => {
+    sortStateRef.current = sortState
+  }, [sortState])
+
+  const updateFilters = React.useCallback((updater: StateUpdater<FilterState>) => {
+    const next = resolveNextState(updater, filtersRef.current)
+    filtersRef.current = next
+    setFilters(next)
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(filterStorageKey, JSON.stringify(next))
     }
-  })
+  }, [filterStorageKey])
 
-  React.useEffect(() => {
-    if (typeof window === "undefined") return
-    window.localStorage.setItem(filterStorageKey, JSON.stringify(filters))
-  }, [filters, filterStorageKey])
+  const updateViewMode = React.useCallback((updater: StateUpdater<ViewMode>) => {
+    const next = resolveNextState(updater, viewModeRef.current)
+    viewModeRef.current = next
+    setViewMode(next)
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(viewStorageKey, next)
+    }
+  }, [viewStorageKey])
 
-  React.useEffect(() => {
-    if (typeof window === "undefined") return
-    window.localStorage.setItem(viewStorageKey, viewMode)
-  }, [viewMode, viewStorageKey])
-
-  React.useEffect(() => {
-    if (typeof window === "undefined") return
-    window.localStorage.setItem(
-      sortStorageKey,
-      JSON.stringify({ key: sortKey, direction: sortDirection })
-    )
-  }, [sortKey, sortDirection, sortStorageKey])
+  const updateSortState = React.useCallback((updater: StateUpdater<SortState>) => {
+    const next = resolveNextState(updater, sortStateRef.current)
+    sortStateRef.current = next
+    setSortState(next)
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(sortStorageKey, JSON.stringify(next))
+    }
+  }, [sortStorageKey])
 
   React.useEffect(() => {
     if (!availableAssets.length) return
     const availableAssetSet = new Set(availableAssets)
-    setFilters((prev) => {
+    updateFilters((prev) => {
       const nextAssets = prev.assets.filter((asset) => availableAssetSet.has(asset))
       if (nextAssets.length === prev.assets.length) {
         return prev
@@ -98,19 +136,24 @@ export function useMarketFilters({
         assets: nextAssets,
       }
     })
-  }, [availableAssets])
+  }, [availableAssets, updateFilters])
 
   const handleSort = (key: SortKey) => {
     if (key === sortKey) {
-      setSortDirection((prev) => (prev === "asc" ? "desc" : "asc"))
+      updateSortState((prev) => ({
+        ...prev,
+        direction: prev.direction === "asc" ? "desc" : "asc",
+      }))
       return
     }
-    setSortKey(key)
-    setSortDirection("desc")
+    updateSortState({
+      key,
+      direction: "desc",
+    })
   }
 
   const handleToggleAsset = (asset: string) => {
-    setFilters((prev) => {
+    updateFilters((prev) => {
       const exists = prev.assets.includes(asset)
       return {
         ...prev,
@@ -122,7 +165,7 @@ export function useMarketFilters({
   }
 
   const handleToggleProtocol = (protocol: string) => {
-    setFilters((prev) => {
+    updateFilters((prev) => {
       const exists = prev.protocols.includes(protocol)
       return {
         ...prev,
@@ -134,22 +177,22 @@ export function useMarketFilters({
   }
 
   const handleToggleIncentive = () => {
-    setFilters((prev) => ({
+    updateFilters((prev) => ({
       ...prev,
       onlyIncentive: !prev.onlyIncentive,
     }))
   }
 
   const handleTogglePosition = () => {
-    setFilters((prev) => ({
+    updateFilters((prev) => ({
       ...prev,
       onlyPosition: !prev.onlyPosition,
     }))
   }
 
   const handleClearFilters = () => {
-    setFilters(defaultFilters)
-    setViewMode("mixed")
+    updateFilters(defaultFilters)
+    updateViewMode("mixed")
   }
 
   return {
@@ -157,7 +200,7 @@ export function useMarketFilters({
     viewMode,
     sortKey,
     sortDirection,
-    setViewMode,
+    setViewMode: updateViewMode,
     handleSort,
     handleToggleAsset,
     handleToggleProtocol,
