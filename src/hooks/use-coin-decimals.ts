@@ -1,6 +1,7 @@
 import * as React from "react"
-import { useSuiClient } from "@mysten/dapp-kit"
+import { useCurrentClient } from "@mysten/dapp-kit-react"
 
+import { dAppKit } from "@/lib/dapp-kit"
 import {
   type CachedCoinMetadata,
   fetchAndCacheCoinMetadata,
@@ -35,7 +36,7 @@ function mergeMetadataMaps(
 }
 
 export function useCoinDecimals(coinTypes: string[]) {
-  const suiClient = useSuiClient()
+  const suiClient = useCurrentClient({ dAppKit })
   const normalizedCoinTypes = React.useMemo(
     () =>
       Array.from(
@@ -72,7 +73,9 @@ export function useCoinDecimals(coinTypes: string[]) {
     const fetchDecimals = async () => {
       const fetchedMetadata = await fetchAndCacheCoinMetadata(
         coinTypesToFetch,
-        suiClient
+        {
+          getCoinMetadata: (input) => suiClient.getCoinMetadata(input),
+        }
       )
       if (!isActive) return
       const availableMetadata = Object.entries(fetchedMetadata).reduce<

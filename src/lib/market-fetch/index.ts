@@ -1,4 +1,8 @@
-import { supportedProtocols, type RewardSummaryItem } from "@/lib/market-data"
+import {
+  supportedProtocols,
+  type RewardSummaryItem,
+  type SupportedProtocol,
+} from "@/lib/market-data"
 import type { WalletPositions } from "@/lib/positions"
 import type { MarketFetchResult, MarketSnapshot } from "./types"
 import { buildSupplyList } from "./utils"
@@ -17,12 +21,20 @@ function mergePositions(all: WalletPositions[]) {
 export async function fetchMarketSnapshot(
   address?: string | null
 ): Promise<MarketSnapshot> {
-  const results = await Promise.allSettled([
-    import("./scallop").then((module) => module.fetchScallop(address)),
-    import("./navi").then((module) => module.fetchNavi(address)),
-    import("./suilend").then((module) => module.fetchSuilend(address)),
-    import("./alphalend").then((module) => module.fetchAlphaLend(address)),
-  ])
+  const fetchers: Record<
+    SupportedProtocol,
+    (address?: string | null) => Promise<MarketFetchResult>
+  > = {
+    Navi: (nextAddress) =>
+      import("./navi").then((module) => module.fetchNavi(nextAddress)),
+    Scallop: (nextAddress) =>
+      import("./scallop").then((module) => module.fetchScallop(nextAddress)),
+    Suilend: (nextAddress) =>
+      import("./suilend").then((module) => module.fetchSuilend(nextAddress)),
+  }
+  const results = await Promise.allSettled(
+    supportedProtocols.map((protocol) => fetchers[protocol](address))
+  )
 
   const rows = results.flatMap((result) =>
     result.status === "fulfilled" ? result.value.rows : []

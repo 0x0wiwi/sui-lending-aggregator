@@ -1,157 +1,20 @@
-import { AlphalendClient } from "@alphafi/alphalend-sdk"
-import { getFullnodeUrl, SuiClient } from "@mysten/sui/client"
+import type { RewardSummaryItem } from "@/lib/market-data"
+import type { WalletPositions } from "@/lib/positions"
+import type { MarketFetchResult, MarketOnlyResult, UserOnlyResult } from "./types"
 
-import {
-  type MarketRow,
-  type RewardSummaryItem,
-} from "@/lib/market-data"
-import { createPositionKey, type WalletPositions } from "@/lib/positions"
-import { type MarketFetchResult, type MarketOnlyResult, type UserOnlyResult } from "./types"
-import {
-  buildSupplyList,
-  formatTokenSymbol,
-  sumBreakdown,
-  toAssetSymbolFromSource,
-  toNormalizedCoinType,
-  toNumber,
-} from "./utils"
+export const ALPHALEND_DISABLED_REASON =
+  "AlphaLend is temporarily disabled until its SDK supports @mysten/sui 2.x."
 
 export async function fetchAlphaLendMarket(): Promise<MarketOnlyResult> {
-  try {
-    const suiClient = new SuiClient({ url: getFullnodeUrl("mainnet") })
-    const alphalendClient = new AlphalendClient("mainnet", suiClient)
-    const markets = await alphalendClient.getAllMarkets()
-    const coinMetadataMap = await alphalendClient.fetchCoinMetadataMap()
-    const marketList = Array.isArray(markets) ? markets : []
-    const rows = marketList
-      .map((market) => {
-        const coinType = toNormalizedCoinType(market.coinType)
-        const asset = toAssetSymbolFromSource(
-          coinMetadataMap.get(market.coinType)?.symbol ?? null,
-          coinType
-        )
-        if (!asset || !coinType) return null
-        const supplyBaseApr = toNumber(market.supplyApr?.interestApr)
-        const borrowBaseApr = toNumber(market.borrowApr?.interestApr)
-        const supplyRewards = (market.supplyApr?.rewards ?? []) as Array<{
-          coinType: string
-          rewardApr: unknown
-        }>
-        const borrowRewards = (market.borrowApr?.rewards ?? []) as Array<{
-          coinType: string
-          rewardApr: unknown
-        }>
-        const supplyBreakdown = supplyRewards
-          .map((reward) => ({
-            token: formatTokenSymbol(reward.coinType),
-            apr: toNumber(reward.rewardApr),
-          }))
-          .filter((reward) => reward.apr > 0)
-        const borrowBreakdown = borrowRewards
-          .map((reward) => ({
-            token: formatTokenSymbol(reward.coinType),
-            apr: toNumber(reward.rewardApr),
-          }))
-          .filter((reward) => reward.apr > 0)
-        const supplyIncentiveApr = sumBreakdown(supplyBreakdown)
-        const borrowIncentiveApr = sumBreakdown(borrowBreakdown)
-        const supplyApr = supplyBaseApr + supplyIncentiveApr
-        const borrowApr = Math.max(borrowBaseApr - borrowIncentiveApr, 0)
-        const utilization = toNumber((market as { utilizationRate?: unknown }).utilizationRate) * 100
-        const row: MarketRow = {
-          asset,
-          coinType,
-          protocol: "AlphaLend",
-          supplyApr,
-          borrowApr,
-          utilization,
-          supplyBaseApr,
-          borrowBaseApr,
-          supplyIncentiveApr,
-          borrowIncentiveApr,
-        }
-        if (supplyBreakdown.length) {
-          row.supplyIncentiveBreakdown = supplyBreakdown
-        }
-        if (borrowBreakdown.length) {
-          row.borrowIncentiveBreakdown = borrowBreakdown
-        }
-        return row
-      })
-      .filter((row): row is MarketRow => Boolean(row))
-    return { rows }
-  } catch (error) {
-    console.error("AlphaLend market fetch failed:", error)
-    return { rows: [] }
-  }
+  return { rows: [] }
 }
 
 export async function fetchAlphaLendUser(
   address?: string | null
 ): Promise<UserOnlyResult> {
-  let positions: WalletPositions = {}
-  let rewardSummary: RewardSummaryItem | undefined
-  if (!address) return { positions, rewardSummary }
-  try {
-    const suiClient = new SuiClient({ url: getFullnodeUrl("mainnet") })
-    const alphalendClient = new AlphalendClient("mainnet", suiClient)
-    const markets = await alphalendClient.getAllMarkets()
-    const coinMetadataMap = await alphalendClient.fetchCoinMetadataMap()
-    const marketList = Array.isArray(markets) ? markets : []
-    const marketById = new Map(
-      marketList.map((market) => [String(market.marketId), market])
-    )
-    const portfolios = (await alphalendClient.getUserPortfolio(address)) as
-      | Array<{
-          suppliedAmounts?: Map<number, unknown>
-          rewardsToClaim?: Array<{ coinType: string; rewardAmount: unknown }>
-        }>
-      | undefined
-    positions = (portfolios ?? []).reduce<WalletPositions>((acc, portfolio) => {
-      const suppliedAmounts = portfolio?.suppliedAmounts
-      if (!suppliedAmounts) return acc
-      for (const [marketId, amount] of suppliedAmounts.entries()) {
-        const market = marketById.get(String(marketId))
-        if (!market) continue
-        const asset = toAssetSymbolFromSource(
-          coinMetadataMap.get(market.coinType)?.symbol ?? null,
-          toNormalizedCoinType(market.coinType)
-        )
-        if (!asset) continue
-        const key = createPositionKey("AlphaLend", asset)
-        acc[key] = (acc[key] ?? 0) + toNumber(amount)
-      }
-      return acc
-    }, {})
-    const rewardTotals = new Map<string, { token: string; amount: number }>()
-    ;(portfolios ?? []).forEach((portfolio) => {
-      const rewards = portfolio?.rewardsToClaim
-      rewards?.forEach((reward) => {
-        const token = formatTokenSymbol(reward.coinType)
-        const amount = toNumber(reward.rewardAmount)
-        if (amount > 0) {
-          const existing = rewardTotals.get(reward.coinType)
-          rewardTotals.set(reward.coinType, {
-            token,
-            amount: (existing?.amount ?? 0) + amount,
-          })
-        }
-      })
-    })
-    rewardSummary = {
-      protocol: "AlphaLend",
-      supplies: buildSupplyList(positions, "AlphaLend"),
-      rewards: Array.from(rewardTotals.entries())
-        .map(([coinType, reward]) => ({
-          token: reward.token,
-          amount: reward.amount,
-          coinType,
-        }))
-        .filter((reward) => reward.amount > 0),
-    }
-  } catch (error) {
-    console.error("AlphaLend user fetch failed:", error)
-  }
+  void address
+  const positions: WalletPositions = {}
+  const rewardSummary: RewardSummaryItem | undefined = undefined
   return { positions, rewardSummary }
 }
 

@@ -1,10 +1,10 @@
 import * as React from "react"
 import {
-  useConnectWallet,
   useCurrentAccount,
-  useDisconnectWallet,
+  useDAppKit,
+  useWalletConnection,
   useWallets,
-} from "@mysten/dapp-kit"
+} from "@mysten/dapp-kit-react"
 
 import { Button } from "@/components/ui/button"
 import { ThemeMenu } from "@/components/ThemeMenu"
@@ -19,18 +19,49 @@ import {
 } from "@/components/ui/dropdown-menu"
 
 export function Header() {
+  const dAppKit = useDAppKit()
   const account = useCurrentAccount()
+  const connection = useWalletConnection()
   const wallets = useWallets()
+  const [walletAction, setWalletAction] = React.useState<
+    "connect" | "disconnect" | null
+  >(null)
   const previewAddress = React.useMemo(() => {
     if (typeof window === "undefined") return null
     const value = new URLSearchParams(window.location.search).get("address")
     return value && value.startsWith("0x") ? value : null
   }, [])
   const displayAddress = previewAddress ?? account?.address
-  const { mutate: connectWallet, isPending: isConnecting } =
-    useConnectWallet()
-  const { mutate: disconnectWallet, isPending: isDisconnecting } =
-    useDisconnectWallet()
+  const isConnecting =
+    connection.isConnecting
+    || connection.isReconnecting
+    || walletAction === "connect"
+  const isDisconnecting = walletAction === "disconnect"
+
+  const handleConnectWallet = React.useCallback(async (
+    wallet: (typeof wallets)[number]
+  ) => {
+    setWalletAction("connect")
+    try {
+      await dAppKit.connectWallet({ wallet })
+    } catch (error) {
+      console.error("Connect wallet failed:", error)
+    } finally {
+      setWalletAction(null)
+    }
+  }, [dAppKit])
+
+  const handleDisconnectWallet = React.useCallback(async () => {
+    setWalletAction("disconnect")
+    try {
+      await dAppKit.disconnectWallet()
+    } catch (error) {
+      console.error("Disconnect wallet failed:", error)
+    } finally {
+      setWalletAction(null)
+    }
+  }, [dAppKit])
+
   return (
     <>
       <div className="flex items-center gap-2">
@@ -42,7 +73,7 @@ export function Header() {
           <Button
             variant="outline"
             size="sm"
-            onClick={() => disconnectWallet()}
+            onClick={() => void handleDisconnectWallet()}
             disabled={isDisconnecting}
           >
             Disconnect
@@ -61,7 +92,7 @@ export function Header() {
                 wallets.map((wallet) => (
                   <DropdownMenuItem
                     key={wallet.name}
-                    onClick={() => connectWallet({ wallet })}
+                    onClick={() => void handleConnectWallet(wallet)}
                   >
                     {wallet.name}
                   </DropdownMenuItem>

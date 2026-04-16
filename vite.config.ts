@@ -10,7 +10,7 @@ export default defineConfig({
     react(),
     tailwindcss(),
     nodePolyfills({
-      include: ["buffer", "process", "crypto", "events", "stream", "vm"],
+      include: ["buffer", "process", "crypto", "events", "os", "stream", "vm"],
       protocolImports: true,
     }),
   ],
@@ -22,6 +22,10 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
+      "@mysten/sui/client": path.resolve(
+        __dirname,
+        "./src/shims/mysten-sui-client.ts"
+      ),
     },
   },
   build: {

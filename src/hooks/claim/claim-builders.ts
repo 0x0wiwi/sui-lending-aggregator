@@ -1,8 +1,6 @@
-import type { SuiClient } from "@mysten/sui/client"
 import type { TransactionObjectArgument } from "@mysten/sui/transactions"
 import { Transaction } from "@mysten/sui/transactions"
 import BN from "bn.js"
-import { AlphalendClient, getUserPositionCapId } from "@alphafi/alphalend-sdk"
 import {
   claimLendingRewardsPTB,
   getUserAvailableLendingRewards,
@@ -16,7 +14,7 @@ import {
 import { PACKAGE_ID } from "@suilend/sdk/_generated/suilend"
 
 import type { Protocol, RewardSummaryItem } from "@/lib/market-data"
-import { getAlphaLendRewardInput } from "@/hooks/claim/alphalend-helpers"
+import type { SuiLegacyClientAdapter } from "@/lib/sui-client"
 import { buildRewardAmountMap } from "@/hooks/claim/swap-helpers"
 
 export type ClaimInput = {
@@ -32,22 +30,22 @@ export type ClaimResult = {
 
 type ClaimBuilderDeps = {
   accountAddress?: string
-  suiClient: SuiClient
+  suiClient: SuiLegacyClientAdapter
   getRewardsForProtocol: (protocol: Protocol) => RewardSummaryItem["rewards"]
   hasSuilendClaim: boolean
-  hasAlphaClaim: boolean
   suilendClaimRewards: NonNullable<
     NonNullable<RewardSummaryItem["claimMeta"]>["suilend"]
   >["rewards"]
   toAtomicAmount: (amount: number, coinType: string) => BN | null
 }
 
+type SuilendRpcClient = Parameters<typeof SuilendClient.initialize>[2]
+
 export function createClaimBuilders({
   accountAddress,
   suiClient,
   getRewardsForProtocol,
   hasSuilendClaim,
-  hasAlphaClaim,
   suilendClaimRewards,
   toAtomicAmount,
 }: ClaimBuilderDeps) {
@@ -57,7 +55,7 @@ export function createClaimBuilders({
     const suilendClient = await SuilendClient.initialize(
       LENDING_MARKET_ID,
       LENDING_MARKET_TYPE,
-      suiClient
+      suiClient as unknown as SuilendRpcClient
     )
     const ownerCaps = await suiClient.getOwnedObjects({
       owner: accountAddress,
@@ -124,7 +122,7 @@ export function createClaimBuilders({
     if (!accountAddress) return { inputs: [], hasClaim: false }
     const builder = new ScallopBuilder({
       walletAddress: accountAddress,
-      client: suiClient,
+      suiClients: [suiClient.inner],
     })
     await builder.init()
     const txBlock = builder.createTxBlock(tx)
@@ -148,114 +146,25 @@ export function createClaimBuilders({
       })
     }
     const obligations = await builder.query.getObligationAccounts(accountAddress)
-    Object.values(obligations).forEach((obligation) => {
-      if (!obligation) return
-      Object.values(obligation.debts).forEach((debt) => {
-        debt?.rewards?.forEach((reward) => {
-          if (!reward || reward.availableClaimCoin <= 0) return
+    for (const obligation of Object.values(obligations)) {
+      if (!obligation) continue
+      for (const debt of Object.values(obligation.debts)) {
+        for (const reward of debt?.rewards ?? []) {
+          if (!reward || reward.availableClaimCoin <= 0) continue
           const rewardCoinType = builder.utils.parseCoinType(reward.coinName)
           inputs.push({
             coinType: rewardCoinType,
-            coin: txBlock.claimBorrowIncentiveQuick(
+            coin: await txBlock.claimBorrowIncentiveQuick(
               reward.coinName,
               obligation.obligationId
-            ) as TransactionObjectArgument,
+            ) as unknown as TransactionObjectArgument,
             amountAtomic: toAtomicAmount(
               amountMap.get(rewardCoinType) ?? 0,
               rewardCoinType
             ),
           })
-        })
-      })
-    })
-    return { inputs, hasClaim: inputs.length > 0 }
-  }
-
-  const appendAlphaLendClaim = async (tx: Transaction): Promise<ClaimResult> => {
-    if (!accountAddress) return { inputs: [], hasClaim: false }
-    if (!hasAlphaClaim) return { inputs: [], hasClaim: false }
-    const positionCapId = await getUserPositionCapId(
-      suiClient,
-      "mainnet",
-      accountAddress
-    )
-    if (!positionCapId) {
-      throw new Error("Missing AlphaLend position cap.")
-    }
-    const alphalendClient = new AlphalendClient("mainnet", suiClient)
-    const constants = alphalendClient.constants
-    const rewardInput = await getAlphaLendRewardInput(
-      suiClient,
-      constants,
-      accountAddress
-    )
-    const coinMap = new Map<string, TransactionObjectArgument[]>()
-    const fulfillPromise = (
-      promise: TransactionObjectArgument,
-      coinType: string
-    ) => {
-      if (
-        coinType === constants.SUI_COIN_TYPE
-        || coinType === constants.SUI_COIN_TYPE_LONG
-      ) {
-        return tx.moveCall({
-          target: `${constants.ALPHALEND_LATEST_PACKAGE_ID}::alpha_lending::fulfill_promise_SUI`,
-          arguments: [
-            tx.object(constants.LENDING_PROTOCOL_ID),
-            promise,
-            tx.object(constants.SUI_SYSTEM_STATE_ID),
-            tx.object(constants.SUI_CLOCK_OBJECT_ID),
-          ],
-        })
-      }
-      return tx.moveCall({
-        target: `${constants.ALPHALEND_LATEST_PACKAGE_ID}::alpha_lending::fulfill_promise`,
-        typeArguments: [coinType],
-        arguments: [
-          tx.object(constants.LENDING_PROTOCOL_ID),
-          promise,
-          tx.object(constants.SUI_CLOCK_OBJECT_ID),
-        ],
-      })
-    }
-    for (const data of rewardInput) {
-      for (let coinType of data.coinTypes) {
-        coinType = `0x${coinType}`
-        const [coin1, promise] = tx.moveCall({
-          target: `${constants.ALPHALEND_LATEST_PACKAGE_ID}::alpha_lending::collect_reward`,
-          typeArguments: [coinType],
-          arguments: [
-            tx.object(constants.LENDING_PROTOCOL_ID),
-            tx.pure.u64(data.marketId),
-            tx.object(positionCapId),
-            tx.object(constants.SUI_CLOCK_OBJECT_ID),
-          ],
-        })
-        const collected: TransactionObjectArgument[] = []
-        if (coin1) collected.push(coin1)
-        if (promise) {
-          const coin2 = fulfillPromise(promise, coinType)
-          if (coin2) collected.push(coin2)
-        }
-        if (collected.length) {
-          const existing = coinMap.get(coinType) ?? []
-          coinMap.set(coinType, existing.concat(collected))
         }
       }
-    }
-    const amountMap = buildRewardAmountMap(getRewardsForProtocol("AlphaLend"))
-    const inputs: ClaimInput[] = []
-    for (const [coinType, coins] of coinMap.entries()) {
-      if (!coins.length) continue
-      const merged = coins[0]
-      if (coins.length > 1) {
-        tx.mergeCoins(merged, coins.slice(1))
-      }
-      inputs.push({
-        coinType,
-        coin: merged,
-        amountAtomic: toAtomicAmount(amountMap.get(coinType) ?? 0, coinType),
-      })
     }
     return { inputs, hasClaim: inputs.length > 0 }
   }
@@ -264,6 +173,5 @@ export function createClaimBuilders({
     appendSuilendClaim,
     appendNaviClaim,
     appendScallopClaim,
-    appendAlphaLendClaim,
   }
 }

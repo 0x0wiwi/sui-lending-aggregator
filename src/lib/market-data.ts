@@ -1,7 +1,28 @@
 import type { Side } from "@suilend/sdk/lib/types"
 
-export type Protocol = "Scallop" | "Navi" | "Suilend" | "AlphaLend"
+export const protocolAvailability = {
+  Scallop: {
+    enabled: true,
+  },
+  Navi: {
+    enabled: true,
+  },
+  Suilend: {
+    enabled: true,
+  },
+  AlphaLend: {
+    enabled: false,
+    reason: "AlphaLend SDK is still pinned to @mysten/sui 1.x.",
+  },
+} as const
+
+export type Protocol = keyof typeof protocolAvailability
 export type AssetSymbol = string
+export type SupportedProtocol = {
+  [Key in Protocol]: (typeof protocolAvailability)[Key]["enabled"] extends true
+    ? Key
+    : never
+}[Protocol]
 
 export type IncentiveBreakdown = {
   token: string
@@ -59,12 +80,30 @@ export type MarketRow = {
   borrowIncentiveBreakdown?: IncentiveBreakdown[]
 }
 
-export const supportedProtocols: Protocol[] = [
-  "Scallop",
-  "Navi",
-  "Suilend",
-  "AlphaLend",
-]
+export const allProtocols = Object.keys(protocolAvailability) as Protocol[]
+export const supportedProtocols = allProtocols.filter(
+  (protocol): protocol is SupportedProtocol =>
+    protocolAvailability[protocol].enabled
+)
+
+export function createProtocolRecord<T>(
+  factory: (protocol: Protocol) => T
+): Record<Protocol, T> {
+  return allProtocols.reduce<Record<Protocol, T>>((acc, protocol) => {
+    acc[protocol] = factory(protocol)
+    return acc
+  }, {} as Record<Protocol, T>)
+}
+
+export function isProtocolSupported(protocol: Protocol) {
+  return protocolAvailability[protocol].enabled
+}
+
+export function getProtocolUnavailableReason(protocol: Protocol) {
+  const config = protocolAvailability[protocol]
+  return "reason" in config ? config.reason : null
+}
+
 export const assetTypeAddresses: Record<AssetSymbol, string> = {
   SUI: "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI",
   USDC: "0xdba34672e30cb065b1f93e3ab55318768fd6fef66c15942c9f7cb846e2f900e7::usdc::USDC",

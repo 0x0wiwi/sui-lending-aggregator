@@ -1,17 +1,9 @@
-import {
-  createNetworkConfig,
-  SuiClientProvider,
-  WalletProvider,
-} from "@mysten/dapp-kit"
-import { getFullnodeUrl } from "@mysten/sui/client"
+import { DAppKitProvider } from "@mysten/dapp-kit-react"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 
 import App from "@/App"
+import { dAppKit } from "@/lib/dapp-kit"
 import { ThemeProvider, useThemeState } from "@/lib/theme"
-
-const { networkConfig } = createNetworkConfig({
-  mainnet: { url: getFullnodeUrl("mainnet") },
-})
 
 const queryClient = new QueryClient()
 
@@ -20,11 +12,9 @@ export function Root() {
   return (
     <ThemeProvider value={theme}>
       <QueryClientProvider client={queryClient}>
-        <SuiClientProvider networks={networkConfig} defaultNetwork="mainnet">
-          <WalletProvider autoConnect>
-            <App />
-          </WalletProvider>
-        </SuiClientProvider>
+        <DAppKitProvider dAppKit={dAppKit}>
+          <App />
+        </DAppKitProvider>
       </QueryClientProvider>
     </ThemeProvider>
   )

@@ -2,10 +2,12 @@ import * as React from "react"
 import { useQueries, useQueryClient } from "@tanstack/react-query"
 
 import {
+  createProtocolRecord,
   supportedProtocols,
   type Protocol,
   type MarketRow,
   type RewardSummaryItem,
+  type SupportedProtocol,
 } from "@/lib/market-data"
 import type { MarketFetchResult } from "@/lib/market-fetch/types"
 import { buildSupplyList } from "@/lib/market-fetch/utils"
@@ -30,18 +32,12 @@ export function useMarketData(address?: string | null): MarketDataState {
   const queryClient = useQueryClient()
   const lastRowsRef = React.useRef<MarketRow[]>([])
   const positionsByProtocolRef = React.useRef<Record<Protocol, WalletPositions>>({
-    Scallop: {},
-    Navi: {},
-    Suilend: {},
-    AlphaLend: {},
+    ...createProtocolRecord(() => ({})),
   })
   const summaryByProtocolRef = React.useRef<
     Record<Protocol, RewardSummaryItem | null>
   >({
-    Scallop: null,
-    Navi: null,
-    Suilend: null,
-    AlphaLend: null,
+    ...createProtocolRecord(() => null),
   })
   const lastMarketSignatureRef = React.useRef<string>("")
   const lastUserSignatureRef = React.useRef<string>("")
@@ -150,7 +146,7 @@ export function useMarketData(address?: string | null): MarketDataState {
   }, [])
 
   const fetchMarketOnly = React.useCallback(
-    async (protocol: Protocol): Promise<MarketFetchResult> => {
+    async (protocol: SupportedProtocol): Promise<MarketFetchResult> => {
       if (protocol === "Scallop") {
         const module = await import("@/lib/market-fetch/scallop")
         return { rows: (await module.fetchScallopMarket()).rows, positions: {} }
@@ -163,14 +159,13 @@ export function useMarketData(address?: string | null): MarketDataState {
         const module = await import("@/lib/market-fetch/suilend")
         return { rows: (await module.fetchSuilendMarket()).rows, positions: {} }
       }
-      const module = await import("@/lib/market-fetch/alphalend")
-      return { rows: (await module.fetchAlphaLendMarket()).rows, positions: {} }
+      throw new Error(`Unsupported protocol: ${protocol}`)
     },
     []
   )
 
   const fetchUserOnly = React.useCallback(
-    async (protocol: Protocol): Promise<MarketFetchResult> => {
+    async (protocol: SupportedProtocol): Promise<MarketFetchResult> => {
       if (protocol === "Scallop") {
         const module = await import("@/lib/market-fetch/scallop")
         const user = await module.fetchScallopUser(address)
@@ -186,9 +181,7 @@ export function useMarketData(address?: string | null): MarketDataState {
         const user = await module.fetchSuilendUser(address)
         return { rows: [], positions: user.positions, rewardSummary: user.rewardSummary }
       }
-      const module = await import("@/lib/market-fetch/alphalend")
-      const user = await module.fetchAlphaLendUser(address)
-      return { rows: [], positions: user.positions, rewardSummary: user.rewardSummary }
+      throw new Error(`Unsupported protocol: ${protocol}`)
     },
     [address]
   )
@@ -198,7 +191,6 @@ export function useMarketData(address?: string | null): MarketDataState {
       Scallop: 5,
       Navi: 7,
       Suilend: 11,
-      AlphaLend: 13,
     }),
     []
   )

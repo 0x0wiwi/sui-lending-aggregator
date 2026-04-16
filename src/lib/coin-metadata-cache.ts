@@ -1,6 +1,20 @@
-import type { CoinMetadata, SuiClient } from "@mysten/sui/client"
-
 import { normalizeCoinType } from "@/lib/market-data"
+
+type CoinMetadataLike = {
+  decimals: number
+  description: string
+  iconUrl?: string | null
+  id?: string | null
+  name: string
+  symbol: string
+}
+
+type CoinMetadataResponse =
+  | {
+      coinMetadata: CoinMetadataLike | null
+    }
+  | CoinMetadataLike
+  | null
 
 export type CachedCoinMetadata = {
   decimals: number
@@ -58,7 +72,19 @@ function isCachedCoinMetadataEntry(value: unknown): value is CachedCoinMetadataE
   )
 }
 
-function sanitizeCoinMetadata(metadata: CoinMetadata | null): CachedCoinMetadata | null {
+function unwrapCoinMetadata(
+  response: CoinMetadataResponse
+): CoinMetadataLike | null {
+  if (!response) return null
+  if ("coinMetadata" in response) {
+    return response.coinMetadata ?? null
+  }
+  return response
+}
+
+function sanitizeCoinMetadata(
+  metadata: CoinMetadataLike | null
+): CachedCoinMetadata | null {
   if (!metadata) return null
   return {
     decimals: metadata.decimals,
@@ -116,7 +142,9 @@ function saveCoinMetadataCache(
 }
 
 async function fetchCoinMetadataWithDedup(
-  suiClient: Pick<SuiClient, "getCoinMetadata">,
+  suiClient: {
+    getCoinMetadata: (input: { coinType: string }) => Promise<CoinMetadataResponse>
+  },
   coinType: string
 ) {
   const existing = inFlightMetadataRequests.get(coinType)
@@ -124,7 +152,7 @@ async function fetchCoinMetadataWithDedup(
 
   const request = suiClient
     .getCoinMetadata({ coinType })
-    .then((metadata) => sanitizeCoinMetadata(metadata))
+    .then((metadata) => sanitizeCoinMetadata(unwrapCoinMetadata(metadata)))
     .finally(() => {
       inFlightMetadataRequests.delete(coinType)
     })
@@ -169,7 +197,9 @@ export function getCachedCoinMetadataSnapshot(
 
 export async function fetchAndCacheCoinMetadata(
   coinTypes: string[],
-  suiClient: Pick<SuiClient, "getCoinMetadata">,
+  suiClient: {
+    getCoinMetadata: (input: { coinType: string }) => Promise<CoinMetadataResponse>
+  },
   storageKey = coinMetadataCacheStorageKey
 ) {
   const normalizedCoinTypes = normalizeRequestedCoinTypes(coinTypes)

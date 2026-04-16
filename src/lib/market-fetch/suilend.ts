@@ -1,4 +1,3 @@
-import { getFullnodeUrl, SuiClient } from "@mysten/sui/client"
 import {
   formatRewards,
   getDedupedAprRewards,
@@ -22,6 +21,7 @@ import {
   type MarketRow,
   type RewardSummaryItem,
 } from "@/lib/market-data"
+import { mainnetLegacySuiClient } from "@/lib/sui-client"
 import { createPositionKey, type WalletPositions } from "@/lib/positions"
 import { type MarketFetchResult, type MarketOnlyResult, type UserOnlyResult } from "./types"
 import BigNumber from "bignumber.js"
@@ -31,6 +31,8 @@ import {
   toAssetSymbolFromSource,
   toNumber,
 } from "./utils"
+
+type SuilendRpcClient = Parameters<typeof SuilendClient.initialize>[2]
 
 function selectSuilendReserves<
   T extends {
@@ -80,14 +82,16 @@ function selectSuilendReserves<
 
 export async function fetchSuilendMarket(): Promise<MarketOnlyResult> {
   try {
-    const suiClient = new SuiClient({ url: getFullnodeUrl("mainnet") })
     const suilendClient = await SuilendClient.initialize(
       LENDING_MARKET_ID,
       LENDING_MARKET_TYPE,
-      suiClient
+      mainnetLegacySuiClient as unknown as SuilendRpcClient
     )
     const { reserveMap, coinMetadataMap, activeRewardCoinTypes } =
-      await initializeSuilend(suiClient, suilendClient)
+      await initializeSuilend(
+        mainnetLegacySuiClient as unknown as SuilendRpcClient,
+        suilendClient
+      )
     const { rewardPriceMap } = await initializeSuilendRewards(
       reserveMap,
       activeRewardCoinTypes
@@ -172,20 +176,22 @@ export async function fetchSuilendUser(
   let rewardSummary: RewardSummaryItem | undefined
   if (!address) return { positions, rewardSummary }
   try {
-    const suiClient = new SuiClient({ url: getFullnodeUrl("mainnet") })
     const suilendClient = await SuilendClient.initialize(
       LENDING_MARKET_ID,
       LENDING_MARKET_TYPE,
-      suiClient
+      mainnetLegacySuiClient as unknown as SuilendRpcClient
     )
     const { reserveMap, coinMetadataMap, refreshedRawReserves, activeRewardCoinTypes } =
-      await initializeSuilend(suiClient, suilendClient)
+      await initializeSuilend(
+        mainnetLegacySuiClient as unknown as SuilendRpcClient,
+        suilendClient
+      )
     const { rewardPriceMap } = await initializeSuilendRewards(
       reserveMap,
       activeRewardCoinTypes
     )
     const obligationsResult = await initializeObligations(
-      suiClient,
+      mainnetLegacySuiClient as unknown as SuilendRpcClient,
       suilendClient,
       refreshedRawReserves,
       reserveMap,
