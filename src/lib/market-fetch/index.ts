@@ -31,6 +31,8 @@ export async function fetchMarketSnapshot(
       import("./scallop").then((module) => module.fetchScallop(nextAddress)),
     Suilend: (nextAddress) =>
       import("./suilend").then((module) => module.fetchSuilend(nextAddress)),
+    AlphaLend: (nextAddress) =>
+      import("./alphalend").then((module) => module.fetchAlphaLend(nextAddress)),
   }
   const results = await Promise.allSettled(
     supportedProtocols.map((protocol) => fetchers[protocol](address))

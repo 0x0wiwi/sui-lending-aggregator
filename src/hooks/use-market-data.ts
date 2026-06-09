@@ -159,6 +159,10 @@ export function useMarketData(address?: string | null): MarketDataState {
         const module = await import("@/lib/market-fetch/suilend")
         return { rows: (await module.fetchSuilendMarket()).rows, positions: {} }
       }
+      if (protocol === "AlphaLend") {
+        const module = await import("@/lib/market-fetch/alphalend")
+        return { rows: (await module.fetchAlphaLendMarket()).rows, positions: {} }
+      }
       throw new Error(`Unsupported protocol: ${protocol}`)
     },
     []
@@ -181,16 +185,22 @@ export function useMarketData(address?: string | null): MarketDataState {
         const user = await module.fetchSuilendUser(address)
         return { rows: [], positions: user.positions, rewardSummary: user.rewardSummary }
       }
+      if (protocol === "AlphaLend") {
+        const module = await import("@/lib/market-fetch/alphalend")
+        const user = await module.fetchAlphaLendUser(address)
+        return { rows: [], positions: user.positions, rewardSummary: user.rewardSummary }
+      }
       throw new Error(`Unsupported protocol: ${protocol}`)
     },
     [address]
   )
 
   const marketIntervals = React.useMemo(
-    () => ({
+    (): Record<SupportedProtocol, number> => ({
       Scallop: 5,
       Navi: 7,
       Suilend: 11,
+      AlphaLend: 13,
     }),
     []
   )

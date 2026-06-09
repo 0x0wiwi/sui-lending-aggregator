@@ -11,8 +11,7 @@ export const protocolAvailability = {
     enabled: true,
   },
   AlphaLend: {
-    enabled: false,
-    reason: "AlphaLend SDK is still pinned to @mysten/sui 1.x.",
+    enabled: true,
   },
 } as const
 

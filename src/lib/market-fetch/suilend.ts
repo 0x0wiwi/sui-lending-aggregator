@@ -21,7 +21,7 @@ import {
   type MarketRow,
   type RewardSummaryItem,
 } from "@/lib/market-data"
-import { mainnetLegacySuiClient } from "@/lib/sui-client"
+import { mainnetSuiClient } from "@/lib/sui-client"
 import { createPositionKey, type WalletPositions } from "@/lib/positions"
 import { type MarketFetchResult, type MarketOnlyResult, type UserOnlyResult } from "./types"
 import BigNumber from "bignumber.js"
@@ -85,11 +85,11 @@ export async function fetchSuilendMarket(): Promise<MarketOnlyResult> {
     const suilendClient = await SuilendClient.initialize(
       LENDING_MARKET_ID,
       LENDING_MARKET_TYPE,
-      mainnetLegacySuiClient as unknown as SuilendRpcClient
+      mainnetSuiClient as unknown as SuilendRpcClient
     )
     const { reserveMap, coinMetadataMap, activeRewardCoinTypes } =
       await initializeSuilend(
-        mainnetLegacySuiClient as unknown as SuilendRpcClient,
+        mainnetSuiClient as unknown as SuilendRpcClient,
         suilendClient
       )
     const { rewardPriceMap } = await initializeSuilendRewards(
@@ -179,11 +179,11 @@ export async function fetchSuilendUser(
     const suilendClient = await SuilendClient.initialize(
       LENDING_MARKET_ID,
       LENDING_MARKET_TYPE,
-      mainnetLegacySuiClient as unknown as SuilendRpcClient
+      mainnetSuiClient as unknown as SuilendRpcClient
     )
     const { reserveMap, coinMetadataMap, refreshedRawReserves, activeRewardCoinTypes } =
       await initializeSuilend(
-        mainnetLegacySuiClient as unknown as SuilendRpcClient,
+        mainnetSuiClient as unknown as SuilendRpcClient,
         suilendClient
       )
     const { rewardPriceMap } = await initializeSuilendRewards(
@@ -191,7 +191,7 @@ export async function fetchSuilendUser(
       activeRewardCoinTypes
     )
     const obligationsResult = await initializeObligations(
-      mainnetLegacySuiClient as unknown as SuilendRpcClient,
+      mainnetSuiClient as unknown as SuilendRpcClient,
       suilendClient,
       refreshedRawReserves,
       reserveMap,

@@ -33,6 +33,7 @@ type UseClaimRewardsArgs = {
 }
 
 type ClaimBuilders = {
+  appendAlphaLendClaim: (tx: Transaction) => Promise<ClaimResult>
   appendNaviClaim: (tx: Transaction) => Promise<ClaimResult>
   appendScallopClaim: (tx: Transaction) => Promise<ClaimResult>
   appendSuilendClaim: (tx: Transaction) => Promise<ClaimResult>
@@ -94,15 +95,17 @@ export function useClaimRewards({
   const hasSuilendClaim =
     suilendClaimRewards.length > 0
     && hasClaimableRewardsForProtocol("Suilend")
+  const hasAlphaClaim = hasClaimableRewardsForProtocol("AlphaLend")
   const hasNaviClaim = hasClaimableRewardsForProtocol("Navi")
   const hasScallopClaim = hasClaimableRewardsForProtocol("Scallop")
   const hasAnyClaim =
     showClaimActions
-    && (hasSuilendClaim || hasNaviClaim || hasScallopClaim)
+    && (hasSuilendClaim || hasAlphaClaim || hasNaviClaim || hasScallopClaim)
 
   const isProtocolClaimSupported = React.useCallback(
     (protocol: Protocol) =>
       protocol === "Suilend"
+      || protocol === "AlphaLend"
       || protocol === "Navi"
       || protocol === "Scallop",
     []
@@ -165,12 +168,14 @@ export function useClaimRewards({
       suiClient,
       getRewardsForProtocol,
       hasSuilendClaim,
+      hasAlphaClaim,
       suilendClaimRewards,
       toAtomicAmount: toAtomicAmountWithDecimals,
     }),
     [
       account?.address,
       getRewardsForProtocol,
+      hasAlphaClaim,
       hasSuilendClaim,
       suilendClaimRewards,
       suiClient,
@@ -183,6 +188,7 @@ export function useClaimRewards({
   }, [
     claimBuilderDeps.accountAddress,
     claimBuilderDeps.getRewardsForProtocol,
+    claimBuilderDeps.hasAlphaClaim,
     claimBuilderDeps.hasSuilendClaim,
     claimBuilderDeps.suilendClaimRewards,
     claimBuilderDeps.suiClient,
@@ -466,6 +472,7 @@ export function useClaimRewards({
     async (protocol: Protocol) => {
       const tx = new Transaction()
       const {
+        appendAlphaLendClaim,
         appendNaviClaim,
         appendScallopClaim,
         appendSuilendClaim,
@@ -486,6 +493,10 @@ export function useClaimRewards({
         hasClaim = result.hasClaim
       } else if (protocol === "Scallop") {
         const result = await appendScallopClaim(tx)
+        inputs = result.inputs
+        hasClaim = result.hasClaim
+      } else if (protocol === "AlphaLend") {
+        const result = await appendAlphaLendClaim(tx)
         inputs = result.inputs
         hasClaim = result.hasClaim
       }
@@ -517,6 +528,7 @@ export function useClaimRewards({
   const buildClaimAllTransaction = React.useCallback(async () => {
     const tx = new Transaction()
     const {
+      appendAlphaLendClaim,
       appendNaviClaim,
       appendScallopClaim,
       appendSuilendClaim,
@@ -542,6 +554,11 @@ export function useClaimRewards({
       inputs.push(...result.inputs)
       hasClaim = hasClaim || result.hasClaim
     }
+    if (hasAlphaClaim) {
+      const result = await appendAlphaLendClaim(tx)
+      inputs.push(...result.inputs)
+      hasClaim = hasClaim || result.hasClaim
+    }
     const filteredInputs = inputs.filter(
       (input) => input.amountAtomic && !input.amountAtomic.isZero()
     )
@@ -558,6 +575,7 @@ export function useClaimRewards({
   }, [
     buildSwapFromInputs,
     getClaimBuilders,
+    hasAlphaClaim,
     hasNaviClaim,
     hasScallopClaim,
     hasSuilendClaim,
