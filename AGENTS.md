@@ -53,6 +53,8 @@
   - `https://docs.suilend.fi/ecosystem/suilend-sdk-guide`
   - `https://github.com/CetusProtocol/aggregator`
   - `https://github.com/CetusProtocol/cetus-sdk-v2`
+  - `https://github.com/current-finance/current-sdk`
+- 修改 Current Finance 整合前，先閱讀 `docs/current-finance-integration.md`。
 - 網路環境統一使用 Sui mainnet，不需支援多網路切換。
 - 資料來源優先透過官方 SDK 取得；若需定時更新，採 5 秒輪詢。
 - 頁面提供 `Refresh` 按鈕供使用者手動更新資料。
@@ -67,7 +69,7 @@
 - 上述流程通過後需 `git commit`，並使用清楚的訊息，如 `feat: add user authentication feature` 或 `fix: resolve issue with data fetching`。
 
 ## Claim 與 Swap（PTB 整合）
-- 目前四個協議（Scallop、Navi、Suilend、AlphaLend）皆使用 **單一 PTB** 完成 claim；claim + swap 也能在 **同一筆 PTB** 內串接完成。
+- 目前五個協議（Scallop、Navi、Suilend、AlphaLend、Current）皆使用 **單一 PTB** 完成 claim；claim + swap 也能在 **同一筆 PTB** 內串接完成。
 - 交換流程以聚合器（Cetus）進行，若無路由或數量過小，則視為不可 swap，但不影響 claim 本身的 PTB 組合能力。
 
 ## 小數點與數量處理

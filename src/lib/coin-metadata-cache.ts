@@ -181,6 +181,9 @@ export function getCachedCoinMetadataSnapshot(
 
     if (cached.metadata) {
       metadataByCoinType[coinType] = cached.metadata
+    } else {
+      missingCoinTypes.push(coinType)
+      return
     }
 
     if (now - cached.fetchedAt > coinMetadataCacheTtlMs) {

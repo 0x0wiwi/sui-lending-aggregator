@@ -13,6 +13,9 @@ export const protocolAvailability = {
   AlphaLend: {
     enabled: true,
   },
+  Current: {
+    enabled: true,
+  },
 } as const
 
 export type Protocol = keyof typeof protocolAvailability
@@ -49,6 +52,18 @@ export type RewardSummaryItem = {
   supplies: RewardSupply[]
   rewards: RewardTokenAmount[]
   claimMeta?: {
+    current?: {
+      claims: Array<{
+        amountAtomic: string
+        marketObjectId: string
+        marketType: string
+        obligationOwnerCapId: string
+        reserveCoinType: string
+        rewardCoinType: string
+        rewardIndex: number
+        rewardType: number
+      }>
+    }
     suilend?: {
       rewards: Array<{
         reserveArrayIndex: bigint

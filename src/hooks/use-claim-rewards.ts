@@ -34,6 +34,7 @@ type UseClaimRewardsArgs = {
 
 type ClaimBuilders = {
   appendAlphaLendClaim: (tx: Transaction) => Promise<ClaimResult>
+  appendCurrentClaim: (tx: Transaction) => Promise<ClaimResult>
   appendNaviClaim: (tx: Transaction) => Promise<ClaimResult>
   appendScallopClaim: (tx: Transaction) => Promise<ClaimResult>
   appendSuilendClaim: (tx: Transaction) => Promise<ClaimResult>
@@ -87,6 +88,10 @@ export function useClaimRewards({
     () => findSummary("Suilend")?.claimMeta?.suilend?.swapInputs ?? [],
     [findSummary]
   )
+  const currentClaims = React.useMemo(
+    () => findSummary("Current")?.claimMeta?.current?.claims ?? [],
+    [findSummary]
+  )
   const hasClaimableRewardsForProtocol = React.useCallback(
     (protocol: Protocol) =>
       hasClaimableRewards(getRewardsForProtocol(protocol), coinDecimalsMap),
@@ -98,16 +103,26 @@ export function useClaimRewards({
   const hasAlphaClaim = hasClaimableRewardsForProtocol("AlphaLend")
   const hasNaviClaim = hasClaimableRewardsForProtocol("Navi")
   const hasScallopClaim = hasClaimableRewardsForProtocol("Scallop")
+  const hasCurrentClaim =
+    currentClaims.length > 0
+    && hasClaimableRewardsForProtocol("Current")
   const hasAnyClaim =
     showClaimActions
-    && (hasSuilendClaim || hasAlphaClaim || hasNaviClaim || hasScallopClaim)
+    && (
+      hasSuilendClaim
+      || hasAlphaClaim
+      || hasNaviClaim
+      || hasScallopClaim
+      || hasCurrentClaim
+    )
 
   const isProtocolClaimSupported = React.useCallback(
     (protocol: Protocol) =>
       protocol === "Suilend"
       || protocol === "AlphaLend"
       || protocol === "Navi"
-      || protocol === "Scallop",
+      || protocol === "Scallop"
+      || protocol === "Current",
     []
   )
 
@@ -169,6 +184,7 @@ export function useClaimRewards({
       getRewardsForProtocol,
       hasSuilendClaim,
       hasAlphaClaim,
+      hasCurrentClaim,
       suilendClaimRewards,
       toAtomicAmount: toAtomicAmountWithDecimals,
     }),
@@ -176,6 +192,7 @@ export function useClaimRewards({
       account?.address,
       getRewardsForProtocol,
       hasAlphaClaim,
+      hasCurrentClaim,
       hasSuilendClaim,
       suilendClaimRewards,
       suiClient,
@@ -189,6 +206,7 @@ export function useClaimRewards({
     claimBuilderDeps.accountAddress,
     claimBuilderDeps.getRewardsForProtocol,
     claimBuilderDeps.hasAlphaClaim,
+    claimBuilderDeps.hasCurrentClaim,
     claimBuilderDeps.hasSuilendClaim,
     claimBuilderDeps.suilendClaimRewards,
     claimBuilderDeps.suiClient,
@@ -473,6 +491,7 @@ export function useClaimRewards({
       const tx = new Transaction()
       const {
         appendAlphaLendClaim,
+        appendCurrentClaim,
         appendNaviClaim,
         appendScallopClaim,
         appendSuilendClaim,
@@ -497,6 +516,10 @@ export function useClaimRewards({
         hasClaim = result.hasClaim
       } else if (protocol === "AlphaLend") {
         const result = await appendAlphaLendClaim(tx)
+        inputs = result.inputs
+        hasClaim = result.hasClaim
+      } else if (protocol === "Current") {
+        const result = await appendCurrentClaim(tx)
         inputs = result.inputs
         hasClaim = result.hasClaim
       }
@@ -529,6 +552,7 @@ export function useClaimRewards({
     const tx = new Transaction()
     const {
       appendAlphaLendClaim,
+      appendCurrentClaim,
       appendNaviClaim,
       appendScallopClaim,
       appendSuilendClaim,
@@ -559,6 +583,11 @@ export function useClaimRewards({
       inputs.push(...result.inputs)
       hasClaim = hasClaim || result.hasClaim
     }
+    if (hasCurrentClaim) {
+      const result = await appendCurrentClaim(tx)
+      inputs.push(...result.inputs)
+      hasClaim = hasClaim || result.hasClaim
+    }
     const filteredInputs = inputs.filter(
       (input) => input.amountAtomic && !input.amountAtomic.isZero()
     )
@@ -576,6 +605,7 @@ export function useClaimRewards({
     buildSwapFromInputs,
     getClaimBuilders,
     hasAlphaClaim,
+    hasCurrentClaim,
     hasNaviClaim,
     hasScallopClaim,
     hasSuilendClaim,

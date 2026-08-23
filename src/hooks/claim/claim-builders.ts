@@ -19,6 +19,11 @@ import type { SuiLegacyClientAdapter } from "@/lib/sui-client"
 import { getAlphaLendRewardInput } from "@/hooks/claim/alphalend-helpers"
 import { buildRewardAmountMap } from "@/hooks/claim/swap-helpers"
 
+const CURRENT_PACKAGE =
+  "0x45bae0425e9098ce5cba3d3fa2836220ad24c9f88aa0dffffb5a52b49319fc70"
+const CURRENT_PROTOCOL_APP =
+  "0xd4395f77a48f6d64af2008280c8dc06ee0fe69953a141e683935f6086d849177"
+
 export type ClaimInput = {
   coinType: string
   coin: TransactionObjectArgument
@@ -36,6 +41,7 @@ type ClaimBuilderDeps = {
   getRewardsForProtocol: (protocol: Protocol) => RewardSummaryItem["rewards"]
   hasSuilendClaim: boolean
   hasAlphaClaim: boolean
+  hasCurrentClaim: boolean
   suilendClaimRewards: NonNullable<
     NonNullable<RewardSummaryItem["claimMeta"]>["suilend"]
   >["rewards"]
@@ -50,6 +56,7 @@ export function createClaimBuilders({
   getRewardsForProtocol,
   hasSuilendClaim,
   hasAlphaClaim,
+  hasCurrentClaim,
   suilendClaimRewards,
   toAtomicAmount,
 }: ClaimBuilderDeps) {
@@ -89,6 +96,51 @@ export function createClaimBuilders({
         amountAtomic: toAtomicAmount(amountMap.get(coinType) ?? 0, coinType),
       }))
     return { inputs, hasClaim: true }
+  }
+
+  const appendCurrentClaim = async (tx: Transaction): Promise<ClaimResult> => {
+    if (!accountAddress || !hasCurrentClaim) {
+      return { inputs: [], hasClaim: false }
+    }
+    const { fetchCurrentUser } = await import("@/lib/market-fetch/current")
+    const freshClaims = (await fetchCurrentUser(accountAddress))
+      .rewardSummary?.claimMeta?.current?.claims ?? []
+    const coinMap = new Map<string, TransactionObjectArgument[]>()
+    const amountMap = new Map<string, BN>()
+    freshClaims.forEach((claim) => {
+      const coin = tx.moveCall({
+        target: `${CURRENT_PACKAGE}::liquidity_mining::claim_reward_as_coin`,
+        arguments: [
+          tx.object(CURRENT_PROTOCOL_APP),
+          tx.object(claim.marketObjectId),
+          tx.object(claim.obligationOwnerCapId),
+          tx.pure.u8(claim.rewardType),
+          tx.pure.u64(claim.rewardIndex),
+          tx.object("0x6"),
+        ],
+        typeArguments: [
+          claim.marketType,
+          claim.reserveCoinType,
+          claim.rewardCoinType,
+        ],
+      })
+      coinMap.set(
+        claim.rewardCoinType,
+        (coinMap.get(claim.rewardCoinType) ?? []).concat(coin)
+      )
+      amountMap.set(
+        claim.rewardCoinType,
+        (amountMap.get(claim.rewardCoinType) ?? new BN(0)).add(
+          new BN(claim.amountAtomic)
+        )
+      )
+    })
+    const inputs = Array.from(coinMap, ([coinType, coins]) => {
+      const coin = coins[0]
+      if (coins.length > 1) tx.mergeCoins(coin, coins.slice(1))
+      return { coinType, coin, amountAtomic: amountMap.get(coinType) ?? null }
+    })
+    return { inputs, hasClaim: inputs.length > 0 }
   }
 
   const appendNaviClaim = async (tx: Transaction): Promise<ClaimResult> => {
@@ -267,5 +319,6 @@ export function createClaimBuilders({
     appendNaviClaim,
     appendScallopClaim,
     appendAlphaLendClaim,
+    appendCurrentClaim,
   }
 }

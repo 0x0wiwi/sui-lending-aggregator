@@ -106,7 +106,17 @@ export function useMarketData(address?: string | null): MarketDataState {
           })
           .sort()
       })
-      return `${positionLines.join("|")}#${rewardLines.join("|")}`
+      const currentClaimLines = summaryByProtocolRef.current.Current
+        ?.claimMeta?.current?.claims.map((claim) => [
+          claim.marketObjectId,
+          claim.reserveCoinType,
+          claim.rewardCoinType,
+          claim.rewardType,
+          claim.rewardIndex,
+          claim.amountAtomic,
+        ].join(":"))
+        .sort() ?? []
+      return `${positionLines.join("|")}#${rewardLines.join("|")}#${currentClaimLines.join("|")}`
     },
     [roundValue]
   )
@@ -163,6 +173,10 @@ export function useMarketData(address?: string | null): MarketDataState {
         const module = await import("@/lib/market-fetch/alphalend")
         return { rows: (await module.fetchAlphaLendMarket()).rows, positions: {} }
       }
+      if (protocol === "Current") {
+        const module = await import("@/lib/market-fetch/current")
+        return { rows: (await module.fetchCurrentMarket()).rows, positions: {} }
+      }
       throw new Error(`Unsupported protocol: ${protocol}`)
     },
     []
@@ -190,6 +204,11 @@ export function useMarketData(address?: string | null): MarketDataState {
         const user = await module.fetchAlphaLendUser(address)
         return { rows: [], positions: user.positions, rewardSummary: user.rewardSummary }
       }
+      if (protocol === "Current") {
+        const module = await import("@/lib/market-fetch/current")
+        const user = await module.fetchCurrentUser(address)
+        return { rows: [], positions: user.positions, rewardSummary: user.rewardSummary }
+      }
       throw new Error(`Unsupported protocol: ${protocol}`)
     },
     [address]
@@ -201,6 +220,7 @@ export function useMarketData(address?: string | null): MarketDataState {
       Navi: 7,
       Suilend: 11,
       AlphaLend: 13,
+      Current: 5,
     }),
     []
   )
@@ -218,8 +238,8 @@ export function useMarketData(address?: string | null): MarketDataState {
       queryKey: ["user", protocol, address],
       queryFn: () => fetchUserOnly(protocol),
       enabled: Boolean(address),
-      refetchInterval: 15000,
-      staleTime: 15000,
+      refetchInterval: protocol === "Current" ? 5000 : 15000,
+      staleTime: protocol === "Current" ? 5000 : 15000,
       refetchIntervalInBackground: false,
     })),
   })

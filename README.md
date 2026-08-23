@@ -3,8 +3,8 @@
 以 **Sui mainnet** 為目標的借貸資訊儀表板，整合多個協議的供借利率、激勵與使用者持倉，並提供 claim / claim + swap 流程。介面採簡潔風格，支援 light/dark mode 與行動裝置。
 
 ## 功能概覽
-- 協議整合：Scallop / Navi / Suilend / AlphaLend
-- 資產：SUI / USDC / USDT / XBTC / DEEP / WAL
+- 協議整合：Scallop / Navi / Suilend / AlphaLend / Current
+- 資產：依各協議的 Sui mainnet 市場動態取得
 - 表格排序 / 篩選（資產、協議、只看持倉、只看 incentives）
 - Reward Summary（依協議與總和顯示）
 - Claim / Claim + Swap（單一 PTB）
@@ -23,6 +23,7 @@ npm install
 npm run dev
 npm run lint
 npm run build
+npm run check:current
 npm run preview
 ```
 
