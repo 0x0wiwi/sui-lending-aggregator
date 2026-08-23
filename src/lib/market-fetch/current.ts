@@ -175,7 +175,8 @@ function getActiveBreakdown(
 ): IncentiveBreakdown[] {
   const now = Date.now()
   const normalizedReserve = normalizeCurrentType(reserveCoinType)
-  return summaries
+  const totals = new Map<string, number>()
+  summaries
     .filter(
       (summary) =>
         summary.rewardType === rewardType
@@ -188,10 +189,11 @@ function getActiveBreakdown(
         && (!reward.endTimeMs || now <= reward.endTimeMs)
         && Number(reward.apr) > 0
     )
-    .map((reward) => ({
-      token: formatTokenSymbol(reward.rewardCoinType),
-      apr: Number(reward.apr) * 100,
-    }))
+    .forEach((reward) => {
+      const token = formatTokenSymbol(reward.rewardCoinType)
+      totals.set(token, (totals.get(token) ?? 0) + Number(reward.apr) * 100)
+    })
+  return Array.from(totals, ([token, apr]) => ({ token, apr }))
 }
 
 async function getObjectJson<T>(objectId: string) {
