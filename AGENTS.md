@@ -55,6 +55,7 @@
   - `https://github.com/CetusProtocol/cetus-sdk-v2`
   - `https://github.com/current-finance/current-sdk`
 - 修改 Current Finance 整合前，先閱讀 `docs/current-finance-integration.md`。
+- 修改協議 market 可見性或 supply 可用性前，先閱讀 `docs/protocol-market-visibility.md`。
 - 網路環境統一使用 Sui mainnet，不需支援多網路切換。
 - 資料來源優先透過官方 SDK 取得。自動更新以單一循環依序更新各協議的 market 與 user/reward，整輪完成後等待 10 秒再開始下一輪。
 - 頁面提供 `Refresh` 按鈕供使用者手動更新資料。

@@ -3,6 +3,7 @@ import type { SortDirection, SortKey } from "@/components/MarketTable"
 
 type FilterState = {
   assets: string[]
+  hideUnavailable: boolean
   protocols: string[]
   onlyIncentive: boolean
   onlyPosition: boolean
@@ -190,6 +191,13 @@ export function useMarketFilters({
     }))
   }
 
+  const handleToggleUnavailable = () => {
+    updateFilters((prev) => ({
+      ...prev,
+      hideUnavailable: !prev.hideUnavailable,
+    }))
+  }
+
   const handleClearFilters = () => {
     updateFilters(defaultFilters)
     updateViewMode("mixed")
@@ -206,6 +214,7 @@ export function useMarketFilters({
     handleToggleProtocol,
     handleToggleIncentive,
     handleTogglePosition,
+    handleToggleUnavailable,
     handleClearFilters,
   }
 }

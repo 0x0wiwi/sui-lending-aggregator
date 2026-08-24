@@ -60,6 +60,7 @@ export async function fetchAlphaLendMarket(): Promise<MarketOnlyResult> {
           asset,
           coinType,
           protocol: "AlphaLend",
+          supplyAvailable: toNumber(market.allowedDepositAmount) > 0,
           supplyApr,
           borrowApr,
           utilization,

@@ -7,11 +7,13 @@ type MarketToolbarProps = {
   selectedProtocols: string[]
   onlyIncentive: boolean
   onlyPosition: boolean
+  hideUnavailable: boolean
   viewMode: "mixed" | "byAsset" | "byProtocol"
   onToggleAsset: (asset: string) => void
   onToggleProtocol: (protocol: string) => void
   onToggleIncentive: () => void
   onTogglePosition: () => void
+  onToggleUnavailable: () => void
   onClearFilters: () => void
   onChangeView: (view: "mixed" | "byAsset" | "byProtocol") => void
 }
@@ -22,11 +24,13 @@ export function MarketToolbar({
   selectedProtocols,
   onlyIncentive,
   onlyPosition,
+  hideUnavailable,
   viewMode,
   onToggleAsset,
   onToggleProtocol,
   onToggleIncentive,
   onTogglePosition,
+  onToggleUnavailable,
   onClearFilters,
   onChangeView,
 }: MarketToolbarProps) {
@@ -35,6 +39,7 @@ export function MarketToolbar({
     && !selectedProtocols.length
     && !onlyIncentive
     && !onlyPosition
+    && hideUnavailable
     && viewMode === "mixed"
 
   return (
@@ -45,10 +50,12 @@ export function MarketToolbar({
         selectedProtocols={selectedProtocols}
         onlyIncentive={onlyIncentive}
         onlyPosition={onlyPosition}
+        hideUnavailable={hideUnavailable}
         onToggleAsset={onToggleAsset}
         onToggleProtocol={onToggleProtocol}
         onToggleIncentive={onToggleIncentive}
         onTogglePosition={onTogglePosition}
+        onToggleUnavailable={onToggleUnavailable}
       />
       <div className="flex flex-wrap items-center gap-2 md:mx-auto">
         <span className="text-xs text-muted-foreground">View</span>

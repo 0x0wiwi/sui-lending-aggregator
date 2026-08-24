@@ -23,6 +23,7 @@ import { normalizeRewards } from "@/lib/reward-utils"
 
 const defaultFilters = {
   assets: [],
+  hideUnavailable: true,
   protocols: [],
   onlyIncentive: false,
   onlyPosition: false,
@@ -120,6 +121,7 @@ export function MarketDashboard() {
     handleToggleProtocol,
     handleToggleIncentive,
     handleTogglePosition,
+    handleToggleUnavailable,
     handleClearFilters,
   } = useMarketFilters({
     defaultFilters,
@@ -175,6 +177,7 @@ export function MarketDashboard() {
   const decimalsMap = useCoinDecimals(swapCoinTypes)
   const swapTargetDecimals = decimalsMap[swapTarget] ?? null
   const filteredRows = rows
+    .filter((row) => !filters.hideUnavailable || row.supplyAvailable)
     .filter((row) =>
       filters.assets.length ? filters.assets.includes(row.asset) : true
     )
@@ -327,11 +330,13 @@ export function MarketDashboard() {
             selectedProtocols={filters.protocols}
             onlyIncentive={filters.onlyIncentive}
             onlyPosition={filters.onlyPosition}
+            hideUnavailable={filters.hideUnavailable}
             viewMode={viewMode}
             onToggleAsset={handleToggleAsset}
             onToggleProtocol={handleToggleProtocol}
             onToggleIncentive={handleToggleIncentive}
             onTogglePosition={handleTogglePosition}
+            onToggleUnavailable={handleToggleUnavailable}
             onChangeView={setViewMode}
             onClearFilters={handleClearFilters}
           />

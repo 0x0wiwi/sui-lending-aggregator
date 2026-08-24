@@ -3,7 +3,10 @@ import { Transaction } from "@mysten/sui/transactions"
 import { deriveDynamicFieldID } from "@mysten/sui/utils"
 import BigNumber from "bignumber.js"
 
-import { isCurrentMarketVisible } from "@/lib/current-market-visibility"
+import {
+  isCurrentMarketListed,
+  isCurrentMarketSupplyAvailable,
+} from "@/lib/current-market-visibility"
 import { calculateCurrentClaimable } from "@/lib/current-reward-math"
 import {
   createPositionKey,
@@ -169,11 +172,11 @@ function toTypeName(value: string) {
   return normalized.startsWith("0x") ? normalized.slice(2) : normalized
 }
 
-function getVisibleCurrentAssets(page: CurrentMarketPage) {
+function getCurrentAssets(page: CurrentMarketPage) {
   return new Map(
     page.content.flatMap((market) => {
       const symbol = market.tokenInfo?.symbol?.trim()
-      if (!isCurrentMarketVisible(market) || !symbol) return []
+      if (!symbol) return []
       return [[normalizeCurrentType(market.token), symbol] as const]
     })
   )
@@ -324,7 +327,7 @@ async function getClaimableForPool(
 
 async function fetchObligation(
   obligation: CurrentObligation,
-  visibleAssets?: Map<string, string>
+  assets?: Map<string, string>
 ) {
   const obligationJson = await getObjectJson<CurrentObligationJson>(
     obligation.obligationObject
@@ -357,8 +360,8 @@ async function fetchObligation(
     ?? []
   const allCoinTypes = Array.from(new Set([...depositTypes, ...debtTypes]))
   const marketName = obligation.marketType.split("::").pop() ?? "Market"
-  const displayedDeposits = marketName === CURRENT_MARKET && visibleAssets
-    ? deposits.filter((deposit) => visibleAssets.has(deposit.coinType))
+  const displayedDeposits = marketName === CURRENT_MARKET && assets
+    ? deposits.filter((deposit) => assets.has(deposit.coinType))
     : []
   const rates = await getMarketRates(
     marketId,
@@ -375,7 +378,7 @@ async function fetchObligation(
   const positions = displayedDeposits.flatMap((deposit) => {
     const coinMetadata = metadata.get(deposit.coinType)
     const exchangeRate = rates.get(deposit.coinType)
-    const symbol = visibleAssets?.get(deposit.coinType)
+    const symbol = assets?.get(deposit.coinType)
     if (!coinMetadata || exchangeRate === undefined || !symbol) return []
     const amountAtomic = deposit.ctokenAmount * exchangeRate / WAD
     return [{
@@ -422,7 +425,7 @@ export async function fetchCurrentMarket(): Promise<MarketOnlyResult> {
   const configByName = new Map(configs.map((config) => [config.name, config]))
   return {
     rows: page.content.flatMap((market) => {
-      if (!isCurrentMarketVisible(market)) return []
+      if (!isCurrentMarketListed(market)) return []
       const config = configByName.get(market.name)
       const coinType = normalizeCurrentType(market.token)
       const symbol = market.tokenInfo?.symbol?.trim()
@@ -450,6 +453,7 @@ export async function fetchCurrentMarket(): Promise<MarketOnlyResult> {
         asset: symbol,
         coinType,
         protocol: "Current" as const,
+        supplyAvailable: isCurrentMarketSupplyAvailable(market),
         supplyApr: supplyBaseApr + supplyIncentiveApr,
         borrowApr: Math.max(0, borrowBaseApr - borrowIncentiveApr),
         utilization: Number(market.utilization) * 100,
@@ -474,9 +478,9 @@ export async function fetchCurrentUser(
     ),
     fetchCurrentMainMarketPage(),
   ])
-  const visibleAssets = getVisibleCurrentAssets(page)
+  const assets = getCurrentAssets(page)
   const results = await Promise.all(
-    obligations.map((obligation) => fetchObligation(obligation, visibleAssets))
+    obligations.map((obligation) => fetchObligation(obligation, assets))
   )
   const positions = results.reduce<WalletPositions>((acc, result) => {
     result.positions.forEach((position) => {

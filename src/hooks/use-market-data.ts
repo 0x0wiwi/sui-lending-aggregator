@@ -81,6 +81,7 @@ export function useMarketData(address?: string | null): MarketDataState {
         .map((row) => {
           const key = `${row.protocol}-${row.asset}-${row.coinType}`
           const values = [
+            row.supplyAvailable,
             roundValue(row.supplyApr, 6),
             roundValue(row.borrowApr, 6),
             roundValue(row.utilization, 6),

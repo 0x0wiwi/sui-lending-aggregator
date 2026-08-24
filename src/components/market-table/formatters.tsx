@@ -8,7 +8,13 @@ export function formatApr(value: number) {
 
 export function renderAlignedPercent(value: number, className?: string) {
   const formatted = formatFloorFixed(value, RATE_DECIMAL_PLACES)
-  if (!formatted) return <span className={className}>—</span>
+  if (!formatted) {
+    return (
+      <span className={cn("inline-flex min-w-[4ch] justify-end", className)}>
+        —
+      </span>
+    )
+  }
   const [whole, fraction] = formatted.split(".")
   const toneClass = className?.includes("text-rose")
     ? "text-rose-500/70 dark:text-rose-400/70"

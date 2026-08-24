@@ -19,10 +19,12 @@ type FiltersBarProps = {
   selectedProtocols: string[]
   onlyIncentive: boolean
   onlyPosition: boolean
+  hideUnavailable: boolean
   onToggleAsset: (asset: string) => void
   onToggleProtocol: (protocol: string) => void
   onToggleIncentive: () => void
   onTogglePosition: () => void
+  onToggleUnavailable: () => void
 }
 
 export function FiltersBar({
@@ -31,10 +33,12 @@ export function FiltersBar({
   selectedProtocols,
   onlyIncentive,
   onlyPosition,
+  hideUnavailable,
   onToggleAsset,
   onToggleProtocol,
   onToggleIncentive,
   onTogglePosition,
+  onToggleUnavailable,
 }: FiltersBarProps) {
   const [assetMenuOpen, setAssetMenuOpen] = React.useState(false)
   const [assetSearch, setAssetSearch] = React.useState("")
@@ -134,6 +138,13 @@ export function FiltersBar({
         onClick={onToggleIncentive}
       >
         Only Incentives
+      </Button>
+      <Button
+        variant={hideUnavailable ? "secondary" : "outline"}
+        size="sm"
+        onClick={onToggleUnavailable}
+      >
+        Hide Unavailable
       </Button>
     </div>
   )

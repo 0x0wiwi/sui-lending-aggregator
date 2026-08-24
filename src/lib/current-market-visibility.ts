@@ -5,8 +5,12 @@ export type CurrentMarketVisibility = {
   supplyPaused?: boolean
 }
 
-export function isCurrentMarketVisible(market: CurrentMarketVisibility) {
-  return !market.hidden
-    && !market.labelGroup
-    && !(market.supplyPaused && market.borrowPaused)
+export function isCurrentMarketListed(market: CurrentMarketVisibility) {
+  return !market.hidden && !market.labelGroup
+}
+
+export function isCurrentMarketSupplyAvailable(
+  market: CurrentMarketVisibility
+) {
+  return !market.supplyPaused
 }

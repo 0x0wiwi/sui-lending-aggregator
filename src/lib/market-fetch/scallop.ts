@@ -89,6 +89,7 @@ export async function fetchScallopMarket(): Promise<MarketOnlyResult> {
   const spools =
     spoolsResult[0]?.status === "fulfilled" ? spoolsResult[0].value : {}
   const borrowIncentivePools = await fetchScallopBorrowIncentivePools()
+  const whitelist = await new ScallopQuery().constants.readWhiteList()
   const pools = Object.values(market.pools ?? {})
   const preferredCoinType: Record<AssetSymbol, string> = {
     SUI: assetTypeAddresses.SUI,
@@ -162,6 +163,9 @@ export async function fetchScallopMarket(): Promise<MarketOnlyResult> {
         asset,
         coinType: poolCoinType,
         protocol: "Scallop",
+        supplyAvailable:
+          !whitelist.deprecated.has(pool.coinName)
+          && pool.maxSupplyCoin > pool.supplyCoin,
         supplyApr,
         borrowApr,
         utilization: pool.utilizationRate * 100,

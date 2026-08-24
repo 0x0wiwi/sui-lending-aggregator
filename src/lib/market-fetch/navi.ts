@@ -124,6 +124,10 @@ export async function fetchNaviMarket(): Promise<MarketOnlyResult> {
           asset,
           coinType: poolCoinType,
           protocol: "Navi",
+          supplyAvailable:
+            pool.status !== "deprecated"
+            && (!pool.deprecatedAt || Date.now() <= pool.deprecatedAt)
+            && toNumber(pool.leftSupply) > 0,
           supplyApr: supplyNetApr,
           borrowApr: borrowNetApr,
           utilization,

@@ -83,6 +83,7 @@ export type MarketRow = {
   asset: AssetSymbol
   coinType: string
   protocol: Protocol
+  supplyAvailable: boolean
   supplyApr: number
   borrowApr: number
   utilization: number

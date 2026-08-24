@@ -141,10 +141,18 @@ export async function fetchSuilendMarket(): Promise<MarketOnlyResult> {
         const borrowIncentiveApr = sumBreakdown(borrowBreakdown)
         const supplyApr = supplyBaseApr + supplyIncentiveApr
         const borrowApr = Math.max(borrowBaseApr - borrowIncentiveApr, 0)
+        const totalSupply = reserve.depositedAmount.minus(
+          reserve.unclaimedSpreadFees
+        )
         const row: MarketRow = {
           asset,
           coinType: reserve.coinType,
           protocol: "Suilend",
+          supplyAvailable:
+            reserve.config.depositLimit.gt(totalSupply)
+            && reserve.config.depositLimitUsd.gt(
+              totalSupply.times(reserve.maxPrice)
+            ),
           supplyApr,
           borrowApr,
           utilization,
