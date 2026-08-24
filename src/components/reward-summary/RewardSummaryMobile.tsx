@@ -1,5 +1,9 @@
 import { Button } from "@/components/ui/button"
-import type { Protocol, RewardSummaryItem } from "@/lib/market-data"
+import {
+  getProtocolLabel,
+  type Protocol,
+  type RewardSummaryItem,
+} from "@/lib/market-data"
 import { hasClaimableRewards } from "@/lib/reward-utils"
 import { RewardSupplyList, RewardTokenList } from "@/components/reward-summary/RewardSummaryLists"
 import { cn } from "@/lib/utils"
@@ -50,7 +54,7 @@ export function RewardSummaryMobile({
       {summaryRows.map((item) => (
         <div key={item.protocol} className="rounded-md border p-3">
           <div className="flex flex-col items-start gap-2">
-            <div className="font-medium">{item.protocol}</div>
+            <div className="font-medium">{getProtocolLabel(item.protocol)}</div>
             {showClaimActions && (() => {
               const canClaim = hasClaimableRewards(item.rewards, coinDecimalsMap)
               return (

@@ -11,7 +11,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
-import { supportedProtocols } from "@/lib/market-data"
+import { getProtocolLabel, supportedProtocols } from "@/lib/market-data"
 
 type FiltersBarProps = {
   assetOptions: string[]
@@ -115,7 +115,7 @@ export function FiltersBar({
               checked={selectedProtocols.includes(protocol)}
               onCheckedChange={() => onToggleProtocol(protocol)}
             >
-              {protocol}
+              {getProtocolLabel(protocol)}
             </DropdownMenuCheckboxItem>
           ))}
         </DropdownMenuContent>

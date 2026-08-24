@@ -14,6 +14,7 @@ import { useMarketData } from "@/hooks/use-market-data"
 import { useMarketFilters } from "@/hooks/use-market-filters"
 import {
   assetTypeAddresses,
+  getProtocolLabel,
   supportedProtocols,
   type MarketRow,
 } from "@/lib/market-data"
@@ -362,7 +363,9 @@ export function MarketDashboard() {
                     return (
                       <Card key={protocol} size="sm" className="overflow-visible">
                         <CardHeader className="py-3">
-                          <CardTitle className="text-sm">{protocol}</CardTitle>
+                          <CardTitle className="text-sm">
+                            {getProtocolLabel(protocol)}
+                          </CardTitle>
                         </CardHeader>
                         <CardContent className="pt-0 overflow-visible">
                           <MarketTable

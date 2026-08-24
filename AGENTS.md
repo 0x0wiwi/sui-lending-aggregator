@@ -71,6 +71,8 @@
 ## Claim 與 Swap（PTB 整合）
 - 目前五個協議（Scallop、Navi、Suilend、AlphaLend、Current）皆使用 **單一 PTB** 完成 claim；claim + swap 也能在 **同一筆 PTB** 內串接完成。
 - 交換流程以聚合器（Cetus）進行，若無路由或數量過小，則視為不可 swap，但不影響 claim 本身的 PTB 組合能力。
+- Navi SDK 2.x 的鏈上讀取需明確傳入專案既有的 `SuiGrpcClient`，不可依賴 SDK 預設 client。
+- `claimLendingRewardsPTB` 會合併相同 reward coin 的輸入，輸出需以 `identifier.suiCoinType` 分組並加總 fresh claimable amount，不可按 reward 陣列 index 對應。
 
 ## 小數點與數量處理
 - 所有幣種小數位數以鏈上 `getCoinMetadata` 的 `decimals` 為準。

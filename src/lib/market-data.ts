@@ -100,6 +100,10 @@ export const supportedProtocols = allProtocols.filter(
     protocolAvailability[protocol].enabled
 )
 
+export function getProtocolLabel(protocol: Protocol) {
+  return protocol === "Current" ? "Current (Main Market only)" : protocol
+}
+
 export function createProtocolRecord<T>(
   factory: (protocol: Protocol) => T
 ): Record<Protocol, T> {

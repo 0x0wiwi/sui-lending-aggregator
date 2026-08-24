@@ -13,6 +13,7 @@ import {
   type RewardSummaryItem,
 } from "@/lib/market-data"
 import { createPositionKey, type WalletPositions } from "@/lib/positions"
+import { mainnetSuiClient } from "@/lib/sui-client"
 import { type MarketFetchResult, type MarketOnlyResult, type UserOnlyResult } from "./types"
 import {
   buildSupplyList,
@@ -152,7 +153,10 @@ export async function fetchNaviUser(address?: string | null): Promise<UserOnlyRe
   let positions: WalletPositions = {}
   let rewardSummary: RewardSummaryItem | undefined
   if (address) {
-    const lendingStates = await getLendingState(address, { env: "prod" })
+    const lendingStates = await getLendingState(address, {
+      client: mainnetSuiClient,
+      env: "prod",
+    })
     positions = lendingStates.reduce<WalletPositions>((acc, state) => {
       const token = state.pool?.token as
         | { symbol?: string; address?: string; coinType?: string }
@@ -175,7 +179,10 @@ export async function fetchNaviUser(address?: string | null): Promise<UserOnlyRe
     }
     rewardSummary = nextRewardSummary
     try {
-      const rewards = await getUserAvailableLendingRewards(address, { env: "prod" })
+      const rewards = await getUserAvailableLendingRewards(address, {
+        client: mainnetSuiClient,
+        env: "prod",
+      })
       const rewardTotals = new Map<string, number>()
       rewards
         .filter((reward) => reward.userClaimableReward > 0)

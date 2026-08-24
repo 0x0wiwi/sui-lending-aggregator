@@ -1,5 +1,9 @@
 import { Button } from "@/components/ui/button"
-import type { Protocol, RewardSummaryItem } from "@/lib/market-data"
+import {
+  getProtocolLabel,
+  type Protocol,
+  type RewardSummaryItem,
+} from "@/lib/market-data"
 import { hasClaimableRewards } from "@/lib/reward-utils"
 import { RewardSupplyList, RewardTokenList } from "@/components/reward-summary/RewardSummaryLists"
 
@@ -65,7 +69,9 @@ export function RewardSummaryTable({
         <tbody>
           {summaryRows.map((item) => (
             <tr key={item.protocol} className="border-b last:border-b-0">
-              <td className="px-2 py-1 font-medium">{item.protocol}</td>
+              <td className="px-2 py-1 font-medium">
+                {getProtocolLabel(item.protocol)}
+              </td>
               <td className="px-2 py-1 align-top whitespace-normal">
                 <RewardSupplyList
                   supplies={item.supplies}

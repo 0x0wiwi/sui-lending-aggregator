@@ -17,6 +17,7 @@ import { PACKAGE_ID } from "@suilend/sdk/_generated/suilend"
 import type { Protocol, RewardSummaryItem } from "@/lib/market-data"
 import type { SuiLegacyClientAdapter } from "@/lib/sui-client"
 import { getAlphaLendRewardInput } from "@/hooks/claim/alphalend-helpers"
+import { groupNaviRewardCoins } from "@/hooks/claim/navi-reward-groups"
 import { buildRewardAmountMap } from "@/hooks/claim/swap-helpers"
 
 const CURRENT_PACKAGE =
@@ -145,6 +146,7 @@ export function createClaimBuilders({
   const appendNaviClaim = async (tx: Transaction): Promise<ClaimResult> => {
     if (!accountAddress) return { inputs: [], hasClaim: false }
     const rewards = await getUserAvailableLendingRewards(accountAddress, {
+      client: suiClient.inner,
       env: "prod",
     })
     const claimRewards = rewards.filter(
@@ -154,22 +156,24 @@ export function createClaimBuilders({
     const claimed = await claimLendingRewardsPTB(tx, claimRewards, {
       customCoinReceive: { type: "skip" },
     })
-    const inputs = claimed
-      .map((item, index) => {
-        const reward = claimRewards[index]
-        if (!reward) return null
-        return {
-          coinType: reward.rewardCoinType,
-          coin: item.coin as TransactionObjectArgument,
-          amountAtomic: toAtomicAmount(
-            reward.userClaimableReward,
-            reward.rewardCoinType
-          ),
-        }
-      })
-      .filter(
-        (input): input is ClaimInput => Boolean(input)
-      )
+    const inputs = groupNaviRewardCoins(
+      claimed.map((item) => ({
+        coin: item.coin as TransactionObjectArgument,
+        coinType: item.identifier.suiCoinType,
+      })),
+      claimRewards.map((reward) => ({
+        amount: reward.userClaimableReward,
+        coinType: reward.rewardCoinType,
+      }))
+    ).map(({ amount, coins, coinType }) => {
+      const coin = coins[0]
+      if (coins.length > 1) tx.mergeCoins(coin, coins.slice(1))
+      return {
+        coinType,
+        coin,
+        amountAtomic: toAtomicAmount(amount, coinType),
+      }
+    })
     return { inputs, hasClaim: true }
   }
 

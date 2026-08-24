@@ -5,7 +5,7 @@ import { ChevronDownIcon, ChevronUpIcon } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import type { MarketRow } from "@/lib/market-data"
+import { getProtocolLabel, type MarketRow } from "@/lib/market-data"
 import type { WalletPositions } from "@/lib/positions"
 import { cn } from "@/lib/utils"
 import { formatApr, renderAlignedPercent } from "@/components/market-table/formatters"
@@ -287,7 +287,7 @@ export function MarketTable({
                       ) : null}
                     </span>
                   </td>
-                  <td className="px-3 py-3">{row.protocol}</td>
+                  <td className="px-3 py-3">{getProtocolLabel(row.protocol)}</td>
                   <td className="px-3 py-3">
                     <AprCell
                       primaryApr={row.supplyApr}
@@ -348,7 +348,7 @@ export function MarketTable({
                     ) : null}
                   </span>
                   <span className="text-xs text-muted-foreground">
-                    {row.protocol}
+                    {getProtocolLabel(row.protocol)}
                   </span>
                 </CardTitle>
               </CardHeader>
