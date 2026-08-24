@@ -56,7 +56,7 @@
   - `https://github.com/current-finance/current-sdk`
 - 修改 Current Finance 整合前，先閱讀 `docs/current-finance-integration.md`。
 - 網路環境統一使用 Sui mainnet，不需支援多網路切換。
-- 資料來源優先透過官方 SDK 取得；若需定時更新，採 5 秒輪詢。
+- 資料來源優先透過官方 SDK 取得。自動更新以單一循環依序更新各協議的 market 與 user/reward，整輪完成後等待 10 秒再開始下一輪。
 - 頁面提供 `Refresh` 按鈕供使用者手動更新資料。
 - APR 僅顯示加總值；hover 時以多行顯示組成明細。
 - Sui 錢包整合以 Mysten Labs dApp Kit 為主，無需自訂錢包設定。

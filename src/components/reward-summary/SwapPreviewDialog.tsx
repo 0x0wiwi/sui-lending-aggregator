@@ -8,7 +8,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
-import type { Protocol, RewardSummaryItem } from "@/lib/market-data"
+import type { Protocol } from "@/lib/market-data"
 import { formatAmount } from "@/components/reward-summary/formatters"
 
 type SwapPreviewItem = {
@@ -17,6 +17,7 @@ type SwapPreviewItem = {
   coinType?: string
   steps: Array<{ from: string; target: string; provider: string }>
   estimatedOut?: string
+  exchangeRate?: string
   note?: string
 }
 
@@ -34,7 +35,7 @@ type SwapPreviewDialogProps = {
   swapPreview: SwapPreview | null
   swapPreviewLoading: boolean
   coinDecimalsMap: Record<string, number>
-  confirmTarget: { protocol: Protocol | "all"; rewards: RewardSummaryItem["rewards"] } | null
+  confirmTarget: Protocol | "all" | null
 }
 
 export function SwapPreviewDialog({
@@ -79,6 +80,12 @@ export function SwapPreviewDialog({
                     Estimated {swapPreview.targetSymbol}{" "}
                     {item.estimatedOut ?? "—"}
                   </div>
+                  {item.exchangeRate ? (
+                    <div className="text-muted-foreground">
+                      Rate {item.exchangeRate} {item.token} /{" "}
+                      {swapPreview.targetSymbol}
+                    </div>
+                  ) : null}
                 </div>
               ))}
               <div className="flex items-center justify-between border-t pt-2 text-xs font-semibold">

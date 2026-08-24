@@ -37,6 +37,7 @@ type RewardSummaryCardProps = {
           coinType?: string
           steps: Array<{ from: string; target: string; provider: string }>
           estimatedOut?: string
+          exchangeRate?: string
           note?: string
         }>
         targetSymbol: string
@@ -77,11 +78,9 @@ export function RewardSummaryCard({
   const selectedTarget =
     swapTargetOptions.find((option) => option.coinType === swapTargetCoinType)
       ?.label ?? "Select"
-  const [confirmTarget, setConfirmTarget] = React.useState<{
-    protocol: Protocol | "all"
-    rewards: RewardSummaryItem["rewards"]
-    title: string
-  } | null>(null)
+  const [confirmTarget, setConfirmTarget] = React.useState<Protocol | "all" | null>(
+    null
+  )
   const [swapPreview, setSwapPreview] = React.useState<{
     items: Array<{
       token: string
@@ -89,6 +88,7 @@ export function RewardSummaryCard({
       coinType?: string
       steps: Array<{ from: string; target: string; provider: string }>
       estimatedOut?: string
+      exchangeRate?: string
       note?: string
     }>
     targetSymbol: string
@@ -98,35 +98,52 @@ export function RewardSummaryCard({
     ? "w-full min-w-0 justify-center"
     : "w-[96px] min-w-0 justify-center"
   const swapDisabled = swapEnabled && !swapAvailable
+  const previewRewards = React.useMemo(
+    () => confirmTarget === "all"
+      ? totalRewardList
+      : summaryRows.find((item) => item.protocol === confirmTarget)?.rewards ?? [],
+    [confirmTarget, summaryRows, totalRewardList]
+  )
+  const previewRewardsRef = React.useRef(previewRewards)
+  const previewRewardKey = previewRewards
+    .map((reward) => `${reward.coinType ?? reward.token}:${reward.amount}`)
+    .sort()
+    .join(",")
 
-  const handleClaim = async (
-    protocol: Protocol,
-    rewards: RewardSummaryItem["rewards"]
-  ) => {
+  React.useEffect(() => {
+    previewRewardsRef.current = previewRewards
+  }, [previewRewards])
+
+  React.useEffect(() => {
+    if (!confirmTarget) return
+    let active = true
+    setSwapPreview(null)
+    void onRequestSwapPreview(confirmTarget, previewRewardsRef.current).then(
+      (preview) => {
+        if (active) setSwapPreview(preview)
+      }
+    ).catch((error) => {
+      console.error("Swap preview failed:", error)
+      if (active) setSwapPreview(null)
+    })
+    return () => {
+      active = false
+    }
+  }, [confirmTarget, onRequestSwapPreview, previewRewardKey])
+
+  const handleClaim = (protocol: Protocol) => {
     if (swapEnabled && swapAvailable) {
-      setConfirmTarget({
-        protocol,
-        rewards,
-        title: protocol,
-      })
+      setConfirmTarget(protocol)
       setSwapPreview(null)
-      const preview = await onRequestSwapPreview(protocol, rewards)
-      setSwapPreview(preview)
       return
     }
     onClaimProtocol(protocol)
   }
 
-  const handleClaimAll = async () => {
+  const handleClaimAll = () => {
     if (swapEnabled && swapAvailable) {
-      setConfirmTarget({
-        protocol: "all",
-        rewards: totalRewardList,
-        title: "Total",
-      })
+      setConfirmTarget("all")
       setSwapPreview(null)
-      const preview = await onRequestSwapPreview("all", totalRewardList)
-      setSwapPreview(preview)
       return
     }
     onClaimAll()
@@ -204,10 +221,10 @@ export function RewardSummaryCard({
         }}
         onContinue={() => {
           if (!confirmTarget) return
-          if (confirmTarget.protocol === "all") {
+          if (confirmTarget === "all") {
             onClaimAll()
           } else {
-            onClaimProtocol(confirmTarget.protocol)
+            onClaimProtocol(confirmTarget)
           }
           setConfirmTarget(null)
           setSwapPreview(null)

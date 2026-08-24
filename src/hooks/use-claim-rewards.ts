@@ -14,6 +14,7 @@ import { formatTokenSymbol } from "@/lib/market-fetch/utils"
 import { dAppKit } from "@/lib/dapp-kit"
 import { getLegacySuiClient } from "@/lib/sui-client"
 import { hasClaimableRewards, normalizeRewards } from "@/lib/reward-utils"
+import { formatSwapRate } from "@/lib/swap-rate"
 import type { ClaimResult } from "@/hooks/claim/claim-builders"
 import {
   formatAtomicAmount,
@@ -170,6 +171,7 @@ export function useClaimRewards({
         coinType?: string
         steps: Array<{ from: string; target: string; provider: string }>
         estimatedOut?: string
+        exchangeRate?: string
         note?: string
       }>
       targetSymbol: string
@@ -324,6 +326,7 @@ export function useClaimRewards({
         coinType?: string
         steps: Array<{ from: string; target: string; provider: string }>
         estimatedOut?: string
+        exchangeRate?: string
         note?: string
       }> = []
       for (const reward of rewards) {
@@ -380,12 +383,19 @@ export function useClaimRewards({
           swapTargetDecimals !== null && routerResult?.amountOut
             ? formatAtomicAmount(routerResult.amountOut, swapTargetDecimals)
             : undefined
+        const estimatedIn = routerResult?.amountIn
+          ? formatAtomicAmount(routerResult.amountIn, decimals)
+          : undefined
         items.push({
           token: reward.token,
           amount: reward.amount,
           coinType: reward.coinType,
           steps,
           estimatedOut,
+          exchangeRate:
+            estimatedIn && estimatedOut
+              ? formatSwapRate(estimatedIn, estimatedOut) ?? undefined
+              : undefined,
         })
       }
 

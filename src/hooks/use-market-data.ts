@@ -1,5 +1,5 @@
 import * as React from "react"
-import { useQueries, useQueryClient } from "@tanstack/react-query"
+import { focusManager, useQueries, useQueryClient } from "@tanstack/react-query"
 
 import {
   createProtocolRecord,
@@ -12,6 +12,9 @@ import {
 import type { MarketFetchResult } from "@/lib/market-fetch/types"
 import { buildSupplyList } from "@/lib/market-fetch/utils"
 import { type WalletPositions } from "@/lib/positions"
+import { runSequentialRefresh } from "@/lib/sequential-refresh"
+
+const REFRESH_DELAY_MS = 10_000
 
 type MarketDataState = {
   rows: MarketRow[]
@@ -29,7 +32,11 @@ export function useMarketData(address?: string | null): MarketDataState {
   const [positions, setPositions] = React.useState<WalletPositions>({})
   const [rewardSummary, setRewardSummary] = React.useState<RewardSummaryItem[]>([])
   const [updatedAt, setUpdatedAt] = React.useState<Date | null>(null)
+  const [isManualRefreshing, setIsManualRefreshing] = React.useState(false)
+  const [pollVersion, setPollVersion] = React.useState(0)
   const queryClient = useQueryClient()
+  const manualRefreshRef = React.useRef(false)
+  const pollEpochRef = React.useRef(0)
   const lastRowsRef = React.useRef<MarketRow[]>([])
   const positionsByProtocolRef = React.useRef<Record<Protocol, WalletPositions>>({
     ...createProtocolRecord(() => ({})),
@@ -214,23 +221,13 @@ export function useMarketData(address?: string | null): MarketDataState {
     [address]
   )
 
-  const marketIntervals = React.useMemo(
-    (): Record<SupportedProtocol, number> => ({
-      Scallop: 5,
-      Navi: 7,
-      Suilend: 11,
-      AlphaLend: 13,
-      Current: 5,
-    }),
-    []
-  )
   const marketQueries = useQueries({
     queries: supportedProtocols.map((protocol) => ({
       queryKey: ["market", protocol],
       queryFn: () => fetchMarketOnly(protocol),
-      refetchInterval: marketIntervals[protocol] * 1000,
-      staleTime: marketIntervals[protocol] * 1000,
-      refetchIntervalInBackground: false,
+      staleTime: REFRESH_DELAY_MS,
+      refetchOnWindowFocus: false,
+      refetchOnReconnect: false,
     })),
   })
   const userQueries = useQueries({
@@ -238,14 +235,18 @@ export function useMarketData(address?: string | null): MarketDataState {
       queryKey: ["user", protocol, address],
       queryFn: () => fetchUserOnly(protocol),
       enabled: Boolean(address),
-      refetchInterval: protocol === "Current" ? 5000 : 15000,
-      staleTime: protocol === "Current" ? 5000 : 15000,
-      refetchIntervalInBackground: false,
+      staleTime: REFRESH_DELAY_MS,
+      refetchOnWindowFocus: false,
+      refetchOnReconnect: false,
     })),
   })
+  const initialLoadComplete =
+    marketQueries.every((query) => query.isFetched)
+    && (!address || userQueries.every((query) => query.isFetched))
   const isLoading =
-    marketQueries.some((query) => query.isLoading || query.isFetching)
-    || userQueries.some((query) => query.isLoading || query.isFetching)
+    isManualRefreshing
+    || marketQueries.some((query) => query.isLoading)
+    || userQueries.some((query) => query.isLoading)
   const marketErrorProtocols = supportedProtocols.filter((_, index) =>
     Boolean(marketQueries[index]?.error)
   )
@@ -294,15 +295,59 @@ export function useMarketData(address?: string | null): MarketDataState {
   }, [buildSummary, buildUserSignature, mergePositions, userQueries])
 
   const refreshAll = React.useCallback(() => {
+    if (manualRefreshRef.current) return
+    manualRefreshRef.current = true
+    setIsManualRefreshing(true)
+    pollEpochRef.current += 1
     void Promise.all([
       queryClient.refetchQueries({ queryKey: ["market"] }),
       queryClient.refetchQueries({ queryKey: ["user"] }),
-    ])
+    ]).finally(() => {
+      manualRefreshRef.current = false
+      setIsManualRefreshing(false)
+      setPollVersion((version) => version + 1)
+    })
   }, [queryClient])
 
   React.useEffect(() => {
-    refreshAll()
-  }, [refreshAll])
+    if (!initialLoadComplete) return
+    let cancelled = false
+    let timeoutId: number
+
+    const runCycle = async () => {
+      const epoch = pollEpochRef.current
+      await runSequentialRefresh(supportedProtocols, async (protocol) => {
+        if (
+          cancelled
+          || epoch !== pollEpochRef.current
+          || !focusManager.isFocused()
+        ) {
+          return false
+        }
+        await Promise.all([
+          queryClient.refetchQueries({
+            queryKey: ["market", protocol],
+            exact: true,
+          }),
+          address
+            ? queryClient.refetchQueries({
+                queryKey: ["user", protocol, address],
+                exact: true,
+              })
+            : Promise.resolve(),
+        ])
+      })
+      if (!cancelled) {
+        timeoutId = window.setTimeout(() => void runCycle(), REFRESH_DELAY_MS)
+      }
+    }
+
+    timeoutId = window.setTimeout(() => void runCycle(), REFRESH_DELAY_MS)
+    return () => {
+      cancelled = true
+      window.clearTimeout(timeoutId)
+    }
+  }, [address, initialLoadComplete, pollVersion, queryClient])
 
   return {
     rows,
