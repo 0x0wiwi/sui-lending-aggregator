@@ -3,19 +3,14 @@ import { renderAlignedNumber } from "@/components/reward-summary/formatters"
 
 type RewardSupplyListProps = {
   supplies: { asset: string; amount: number }[]
-  decimalsMap: Record<string, number>
-  assetCoinTypes: Record<string, string>
 }
 
 type RewardTokenListProps = {
   rewards: RewardSummaryItem["rewards"]
-  decimalsMap: Record<string, number>
 }
 
 export function RewardSupplyList({
   supplies,
-  decimalsMap,
-  assetCoinTypes,
 }: RewardSupplyListProps) {
   if (!supplies.length) return "—"
   return (
@@ -26,19 +21,14 @@ export function RewardSupplyList({
           className="grid grid-cols-[5ch_1fr] items-baseline gap-3"
         >
           <span className="font-medium">{item.asset}</span>
-          <span>
-            {renderAlignedNumber(
-              item.amount,
-              item.asset ? decimalsMap[assetCoinTypes[item.asset]] : undefined
-            )}
-          </span>
+          <span>{renderAlignedNumber(item.amount)}</span>
         </div>
       ))}
     </div>
   )
 }
 
-export function RewardTokenList({ rewards, decimalsMap }: RewardTokenListProps) {
+export function RewardTokenList({ rewards }: RewardTokenListProps) {
   if (!rewards.length) return "—"
   return (
     <div className="grid gap-1">
@@ -48,12 +38,7 @@ export function RewardTokenList({ rewards, decimalsMap }: RewardTokenListProps) 
           className="grid grid-cols-[5ch_1fr] items-baseline gap-3"
         >
           <span className="font-medium">{item.token}</span>
-          <span>
-            {renderAlignedNumber(
-              item.amount,
-              item.coinType ? decimalsMap[item.coinType] : undefined
-            )}
-          </span>
+          <span>{renderAlignedNumber(item.amount)}</span>
         </div>
       ))}
     </div>

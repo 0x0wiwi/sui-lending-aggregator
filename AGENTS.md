@@ -75,8 +75,8 @@
 - `claimLendingRewardsPTB` 會合併相同 reward coin 的輸入，輸出需以 `identifier.suiCoinType` 分組並加總 fresh claimable amount，不可按 reward 陣列 index 對應。
 
 ## 小數點與數量處理
-- 所有幣種小數位數以鏈上 `getCoinMetadata` 的 `decimals` 為準。
-- 顯示與 swap/claim 計算都使用 **截斷（ROUND_FLOOR）**，避免超出鏈上可表示的精度。
+- swap/claim 計算與原子量以鏈上 `getCoinMetadata` 的 `decimals` 為準。
+- UI 的 APR、utilization 與 exchange rate 固定顯示 3 位小數，token amount 固定顯示 5 位小數，全部使用 **截斷（ROUND_FLOOR）**。
 - 任何換算後的原子量為 0 的數量，視為不可 claim / swap，需在 UI 與交易組合時過濾。
 
 ## 前端結構重點

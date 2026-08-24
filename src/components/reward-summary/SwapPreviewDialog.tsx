@@ -1,3 +1,4 @@
+import BigNumber from "bignumber.js"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -9,7 +10,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import type { Protocol } from "@/lib/market-data"
-import { formatAmount } from "@/components/reward-summary/formatters"
+import { formatTokenAmount } from "@/lib/format-number"
 import { getSwapPreviewView } from "@/lib/swap-preview-state"
 
 type SwapPreviewItem = {
@@ -35,7 +36,6 @@ type SwapPreviewDialogProps = {
   onContinue: () => void
   swapPreview: SwapPreview | null
   swapPreviewLoading: boolean
-  coinDecimalsMap: Record<string, number>
   confirmTarget: Protocol | "all" | null
 }
 
@@ -46,7 +46,6 @@ export function SwapPreviewDialog({
   onContinue,
   swapPreview,
   swapPreviewLoading,
-  coinDecimalsMap,
   confirmTarget,
 }: SwapPreviewDialogProps) {
   const view = getSwapPreviewView(
@@ -71,10 +70,7 @@ export function SwapPreviewDialog({
                   <div className="flex items-center justify-between font-medium">
                     <span>{item.token}</span>
                     <span>
-                      {formatAmount(
-                        item.amount,
-                        item.coinType ? coinDecimalsMap[item.coinType] : undefined
-                      )}
+                      {formatTokenAmount(item.amount)}
                     </span>
                   </div>
                   {item.note ? (
@@ -82,7 +78,9 @@ export function SwapPreviewDialog({
                   ) : null}
                   <div className="text-muted-foreground">
                     Estimated {swapPreview.targetSymbol}{" "}
-                    {item.estimatedOut ?? "—"}
+                    {item.estimatedOut
+                      ? formatTokenAmount(item.estimatedOut.replace(/,/g, ""))
+                      : "—"}
                   </div>
                   {item.exchangeRate ? (
                     <div className="text-muted-foreground">
@@ -96,17 +94,14 @@ export function SwapPreviewDialog({
                 <span>Total</span>
                 <span>
                   {swapPreview.items.length
-                    ? swapPreview.items
-                        .map((item) =>
-                          item.estimatedOut
-                            ? Number(item.estimatedOut.replace(/,/g, ""))
-                            : 0
+                    ? formatTokenAmount(
+                        swapPreview.items.reduce(
+                          (sum, item) => item.estimatedOut
+                            ? sum.plus(item.estimatedOut.replace(/,/g, ""))
+                            : sum,
+                          new BigNumber(0)
                         )
-                        .reduce((sum, value) => sum + value, 0)
-                        .toLocaleString("en-US", {
-                          minimumFractionDigits: 0,
-                          maximumFractionDigits: 12,
-                        })
+                      )
                     : "—"}{" "}
                   {swapPreview.items.length ? swapPreview.targetSymbol : ""}
                 </span>

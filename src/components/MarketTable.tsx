@@ -1,5 +1,4 @@
 import * as React from "react"
-import BigNumber from "bignumber.js"
 import { ChevronDownIcon, ChevronUpIcon } from "lucide-react"
 
 import { Badge } from "@/components/ui/badge"
@@ -8,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { getProtocolLabel, type MarketRow } from "@/lib/market-data"
 import type { WalletPositions } from "@/lib/positions"
 import { cn } from "@/lib/utils"
+import { formatTokenAmount } from "@/lib/format-number"
 import { formatApr, renderAlignedPercent } from "@/components/market-table/formatters"
 
 export type SortKey =
@@ -23,7 +23,6 @@ export type SortDirection = "asc" | "desc"
 type MarketTableProps = {
   rows: MarketRow[]
   positions: WalletPositions
-  coinDecimalsMap: Record<string, number>
   assetCoinTypes: Record<string, string>
   sortKey: SortKey
   sortDirection: SortDirection
@@ -156,7 +155,6 @@ export function MarketTable({
   sortKey,
   sortDirection,
   onSort,
-  coinDecimalsMap,
   assetCoinTypes,
 }: MarketTableProps) {
   const [copiedAsset, setCopiedAsset] = React.useState<string | null>(null)
@@ -182,25 +180,6 @@ export function MarketTable({
       }
     }
   }, [])
-
-  const formatTokenAmount = React.useCallback(
-    (coinType: string | undefined, amount: number | null) => {
-      if (amount === null) return "—"
-      const decimals = coinType ? coinDecimalsMap[coinType] : undefined
-      const maxDigits =
-        typeof decimals === "number" && Number.isFinite(decimals)
-          ? Math.max(decimals, 0)
-          : 12
-      const fixed = new BigNumber(amount).toFixed(maxDigits, BigNumber.ROUND_FLOOR)
-      const [whole, fractionRaw] = fixed.split(".")
-      const fraction = fractionRaw ? fractionRaw.replace(/0+$/, "") : ""
-      const wholeFormatted = Number(whole).toLocaleString("en-US", {
-        maximumFractionDigits: 0,
-      })
-      return fraction ? `${wholeFormatted}.${fraction}` : wholeFormatted
-    },
-    [coinDecimalsMap]
-  )
 
   return (
     <>
@@ -312,7 +291,7 @@ export function MarketTable({
                     {renderAlignedPercent(row.utilization)}
                   </td>
                   <td className="px-3 py-3">
-                    {formatTokenAmount(row.coinType, position)}
+                    {position === null ? "—" : formatTokenAmount(position)}
                   </td>
                 </tr>
               )
@@ -382,7 +361,7 @@ export function MarketTable({
                 <div className="flex items-center justify-between">
                   <span className="text-muted-foreground">Your Supply</span>
                   <span className={cn(!position && "text-muted-foreground")}>
-                    {formatTokenAmount(row.coinType, position)}
+                    {position === null ? "—" : formatTokenAmount(position)}
                   </span>
                 </div>
               </CardContent>

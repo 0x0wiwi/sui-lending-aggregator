@@ -1,4 +1,5 @@
 import BigNumber from "bignumber.js"
+import { RATE_DECIMAL_PLACES } from "./format-number.ts"
 
 export function formatSwapRate(amountIn: string, amountOut: string) {
   const input = new BigNumber(amountIn.replace(/,/g, ""))
@@ -8,5 +9,7 @@ export function formatSwapRate(amountIn: string, amountOut: string) {
     return null
   }
 
-  return output.dividedBy(input).toFixed(3, BigNumber.ROUND_FLOOR)
+  return output
+    .dividedBy(input)
+    .toFixed(RATE_DECIMAL_PLACES, BigNumber.ROUND_FLOOR)
 }

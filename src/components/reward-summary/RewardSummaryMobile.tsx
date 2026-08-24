@@ -13,7 +13,6 @@ type RewardSummaryMobileProps = {
   totalSupplyList: { asset: string; amount: number }[]
   totalRewardList: RewardSummaryItem["rewards"]
   showClaimActions: boolean
-  assetCoinTypes: Record<string, string>
   claimError: string | null
   claimingProtocol: Protocol | "all" | null
   hasAnyClaim: boolean
@@ -31,7 +30,6 @@ export function RewardSummaryMobile({
   totalSupplyList,
   totalRewardList,
   showClaimActions,
-  assetCoinTypes,
   claimError,
   claimingProtocol,
   hasAnyClaim,
@@ -92,15 +90,11 @@ export function RewardSummaryMobile({
           <div className="mt-2 grid gap-2">
             <div>
               <div className="text-[11px] text-muted-foreground">Supplied Assets</div>
-              <RewardSupplyList
-                supplies={item.supplies}
-                decimalsMap={coinDecimalsMap}
-                assetCoinTypes={assetCoinTypes}
-              />
+              <RewardSupplyList supplies={item.supplies} />
             </div>
             <div>
               <div className="text-[11px] text-muted-foreground">Rewards</div>
-              <RewardTokenList rewards={item.rewards} decimalsMap={coinDecimalsMap} />
+              <RewardTokenList rewards={item.rewards} />
             </div>
           </div>
         </div>
@@ -139,18 +133,11 @@ export function RewardSummaryMobile({
         <div className="mt-2 grid gap-2">
           <div>
             <div className="text-[11px] text-muted-foreground">Supplied Assets</div>
-            <RewardSupplyList
-              supplies={totalSupplyList}
-              decimalsMap={coinDecimalsMap}
-              assetCoinTypes={assetCoinTypes}
-            />
+            <RewardSupplyList supplies={totalSupplyList} />
           </div>
           <div>
             <div className="text-[11px] text-muted-foreground">Rewards</div>
-            <RewardTokenList
-              rewards={totalRewardList}
-              decimalsMap={coinDecimalsMap}
-            />
+            <RewardTokenList rewards={totalRewardList} />
           </div>
         </div>
       </div>

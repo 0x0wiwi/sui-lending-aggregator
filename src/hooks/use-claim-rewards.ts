@@ -348,9 +348,7 @@ export function useClaimRewards({
             coinType: reward.coinType,
             steps: [],
             note: "No swap needed",
-            estimatedOut: reward.amount.toLocaleString("en-US", {
-              maximumFractionDigits: 12,
-            }),
+            estimatedOut: String(reward.amount),
           })
           continue
         }

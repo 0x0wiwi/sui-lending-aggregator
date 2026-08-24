@@ -304,7 +304,6 @@ export function MarketDashboard() {
             totalSupplyList={totalSupplyList}
             totalRewardList={totalRewardList}
             showClaimActions={showClaimActions}
-            assetCoinTypes={assetCoinTypes}
             claimError={claimError}
             claimingProtocol={claimingProtocol}
             hasAnyClaim={hasAnyClaim}
@@ -343,7 +342,6 @@ export function MarketDashboard() {
                 <MarketTable
                   rows={sortedRows}
                   positions={positions}
-                  coinDecimalsMap={decimalsMap}
                   assetCoinTypes={assetCoinTypes}
                   sortKey={sortKey}
                   sortDirection={sortDirection}
@@ -371,7 +369,6 @@ export function MarketDashboard() {
                           <MarketTable
                             rows={rows}
                             positions={positions}
-                            coinDecimalsMap={decimalsMap}
                             assetCoinTypes={assetCoinTypes}
                             sortKey={sortKey}
                             sortDirection={sortDirection}
@@ -402,7 +399,6 @@ export function MarketDashboard() {
                           <MarketTable
                             rows={rows}
                             positions={positions}
-                            coinDecimalsMap={decimalsMap}
                             assetCoinTypes={assetCoinTypes}
                             sortKey={sortKey}
                             sortDirection={sortDirection}

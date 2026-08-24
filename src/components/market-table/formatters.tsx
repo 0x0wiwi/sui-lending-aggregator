@@ -1,12 +1,14 @@
 import { cn } from "@/lib/utils"
+import { formatFloorFixed, RATE_DECIMAL_PLACES } from "@/lib/format-number"
 
 export function formatApr(value: number) {
-  return Number.isFinite(value) ? `${value.toFixed(3)}%` : "—"
+  const formatted = formatFloorFixed(value, RATE_DECIMAL_PLACES)
+  return formatted ? `${formatted}%` : "—"
 }
 
 export function renderAlignedPercent(value: number, className?: string) {
-  if (!Number.isFinite(value)) return <span className={className}>—</span>
-  const formatted = value.toFixed(3)
+  const formatted = formatFloorFixed(value, RATE_DECIMAL_PLACES)
+  if (!formatted) return <span className={className}>—</span>
   const [whole, fraction] = formatted.split(".")
   const toneClass = className?.includes("text-rose")
     ? "text-rose-500/70 dark:text-rose-400/70"

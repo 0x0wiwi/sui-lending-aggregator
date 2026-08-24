@@ -12,7 +12,6 @@ type RewardSummaryTableProps = {
   totalSupplyList: { asset: string; amount: number }[]
   totalRewardList: RewardSummaryItem["rewards"]
   showClaimActions: boolean
-  assetCoinTypes: Record<string, string>
   claimError: string | null
   claimingProtocol: Protocol | "all" | null
   hasAnyClaim: boolean
@@ -30,7 +29,6 @@ export function RewardSummaryTable({
   totalSupplyList,
   totalRewardList,
   showClaimActions,
-  assetCoinTypes,
   claimError,
   claimingProtocol,
   hasAnyClaim,
@@ -73,14 +71,10 @@ export function RewardSummaryTable({
                 {getProtocolLabel(item.protocol)}
               </td>
               <td className="px-2 py-1 align-top whitespace-normal">
-                <RewardSupplyList
-                  supplies={item.supplies}
-                  decimalsMap={coinDecimalsMap}
-                  assetCoinTypes={assetCoinTypes}
-                />
+                <RewardSupplyList supplies={item.supplies} />
               </td>
               <td className="px-2 py-1 align-top whitespace-normal">
-                <RewardTokenList rewards={item.rewards} decimalsMap={coinDecimalsMap} />
+                <RewardTokenList rewards={item.rewards} />
               </td>
               {showClaimActions && (
                 <td className="px-2 py-1 align-top whitespace-nowrap text-right w-[160px]">
@@ -129,14 +123,10 @@ export function RewardSummaryTable({
           <tr className="border-t bg-muted/30">
             <td className="px-2 py-1 font-medium">Total</td>
             <td className="px-2 py-1 align-top whitespace-normal">
-              <RewardSupplyList
-                supplies={totalSupplyList}
-                decimalsMap={coinDecimalsMap}
-                assetCoinTypes={assetCoinTypes}
-              />
+              <RewardSupplyList supplies={totalSupplyList} />
             </td>
             <td className="px-2 py-1 align-top whitespace-normal">
-              <RewardTokenList rewards={totalRewardList} decimalsMap={coinDecimalsMap} />
+              <RewardTokenList rewards={totalRewardList} />
             </td>
             {showClaimActions && (
               <td className="px-2 py-1 align-top whitespace-nowrap text-right w-[160px]">

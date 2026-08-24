@@ -11,7 +11,6 @@ type RewardSummaryCardProps = {
   totalSupplyList: { asset: string; amount: number }[]
   totalRewardList: RewardSummaryItem["rewards"]
   showClaimActions: boolean
-  assetCoinTypes: Record<string, string>
   claimError: string | null
   claimingProtocol: Protocol | "all" | null
   hasAnyClaim: boolean
@@ -54,7 +53,6 @@ export function RewardSummaryCard({
   totalSupplyList,
   totalRewardList,
   showClaimActions,
-  assetCoinTypes,
   claimError,
   claimingProtocol,
   hasAnyClaim,
@@ -172,7 +170,6 @@ export function RewardSummaryCard({
             totalSupplyList={totalSupplyList}
             totalRewardList={totalRewardList}
             showClaimActions={showClaimActions}
-            assetCoinTypes={assetCoinTypes}
             claimError={claimError}
             claimingProtocol={claimingProtocol}
             hasAnyClaim={hasAnyClaim}
@@ -189,7 +186,6 @@ export function RewardSummaryCard({
             totalSupplyList={totalSupplyList}
             totalRewardList={totalRewardList}
             showClaimActions={showClaimActions}
-            assetCoinTypes={assetCoinTypes}
             claimError={claimError}
             claimingProtocol={claimingProtocol}
             hasAnyClaim={hasAnyClaim}
@@ -229,7 +225,6 @@ export function RewardSummaryCard({
         }}
         swapPreview={swapPreview}
         swapPreviewLoading={swapPreviewLoading}
-        coinDecimalsMap={coinDecimalsMap}
         confirmTarget={confirmTarget}
       />
     </div>
