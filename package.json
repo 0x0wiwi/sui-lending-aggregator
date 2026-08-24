@@ -8,6 +8,7 @@
     "build": "tsc -b && vite build",
     "check:current": "node scripts/check-current-reward-math.ts",
     "check:display-format": "node scripts/check-display-format.ts",
+    "check:market-visibility": "node scripts/check-market-visibility.ts",
     "check:navi": "node scripts/check-navi-reward-groups.ts",
     "check:refresh-cycle": "node scripts/check-sequential-refresh.ts",
     "check:swap-preview": "node scripts/check-swap-preview.ts",

@@ -42,6 +42,8 @@ Scallop SDK 的 `Whitelist` 同時公開 `lending` 與 `deprecated` 集合。`ge
 
 SDK 的 supply builder 本身只驗證資產在 `whitelist.lending`，沒有用 `deprecated` 阻止交易。因此 `deprecated` 是官方產品可用性訊號，不是 builder 的完整鏈上 preflight。若需要判斷特定輸入數量是否成功，仍要在送出前 dry run。
 
+官方 whitelist API 於 2026-08-24 從聚合器與 Scallop 正式網站皆回傳 `403`，SDK 遇到錯誤時會讓整份 whitelist 退回空集合。實作在 `lending` 集合非空時以即時 `deprecated` 資料為準，只有 `lending` 也為空時才使用上述官方 deprecated 快照作為 fallback，避免 deprecated 資產重新出現在市場中。
+
 ## Navi
 
 ### 官方欄位

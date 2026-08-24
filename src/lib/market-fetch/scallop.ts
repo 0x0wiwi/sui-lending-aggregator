@@ -8,6 +8,7 @@ import {
   type RewardSupply,
 } from "@/lib/market-data"
 import { type WalletPositions } from "@/lib/positions"
+import { isScallopMarketSupplyAvailable } from "@/lib/scallop-market-visibility"
 import { type MarketFetchResult, type MarketOnlyResult, type UserOnlyResult } from "./types"
 import {
   formatTokenSymbol,
@@ -163,9 +164,11 @@ export async function fetchScallopMarket(): Promise<MarketOnlyResult> {
         asset,
         coinType: poolCoinType,
         protocol: "Scallop",
-        supplyAvailable:
-          !whitelist.deprecated.has(pool.coinName)
-          && pool.maxSupplyCoin > pool.supplyCoin,
+        supplyAvailable: isScallopMarketSupplyAvailable(
+          pool,
+          whitelist.deprecated,
+          whitelist.lending.size === 0
+        ),
         supplyApr,
         borrowApr,
         utilization: pool.utilizationRate * 100,
