@@ -115,16 +115,14 @@ export function RewardSummaryCard({
   }, [previewRewards])
 
   React.useEffect(() => {
-    if (!confirmTarget) return
+    if (!confirmTarget || !previewRewardsRef.current.length) return
     let active = true
-    setSwapPreview(null)
     void onRequestSwapPreview(confirmTarget, previewRewardsRef.current).then(
       (preview) => {
-        if (active) setSwapPreview(preview)
+        if (active && preview) setSwapPreview(preview)
       }
     ).catch((error) => {
       console.error("Swap preview failed:", error)
-      if (active) setSwapPreview(null)
     })
     return () => {
       active = false

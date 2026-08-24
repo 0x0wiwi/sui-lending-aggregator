@@ -9,6 +9,7 @@
     "check:current": "node scripts/check-current-reward-math.ts",
     "check:navi": "node scripts/check-navi-reward-groups.ts",
     "check:refresh-cycle": "node scripts/check-sequential-refresh.ts",
+    "check:swap-preview": "node scripts/check-swap-preview.ts",
     "check:swap-rate": "node scripts/check-swap-rate.ts",
     "lint": "eslint .",
     "preview": "vite preview",

@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/alert-dialog"
 import type { Protocol } from "@/lib/market-data"
 import { formatAmount } from "@/components/reward-summary/formatters"
+import { getSwapPreviewView } from "@/lib/swap-preview-state"
 
 type SwapPreviewItem = {
   token: string
@@ -48,6 +49,11 @@ export function SwapPreviewDialog({
   coinDecimalsMap,
   confirmTarget,
 }: SwapPreviewDialogProps) {
+  const view = getSwapPreviewView(
+    Boolean(swapPreview?.items.length),
+    swapPreviewLoading
+  )
+
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
       <AlertDialogContent>
@@ -58,9 +64,7 @@ export function SwapPreviewDialog({
           </AlertDialogDescription>
         </AlertDialogHeader>
         <div className="grid gap-2 text-xs">
-          {swapPreviewLoading ? (
-            <div>Loading routes...</div>
-          ) : swapPreview?.items.length ? (
+          {view === "preview" && swapPreview ? (
             <div className="grid gap-3">
               {swapPreview.items.map((item) => (
                 <div key={item.token} className="grid gap-1 rounded-md border p-2">
@@ -113,6 +117,8 @@ export function SwapPreviewDialog({
                 </div>
               )}
             </div>
+          ) : view === "loading" ? (
+            <div>Loading routes...</div>
           ) : (
             <div>No swappable rewards.</div>
           )}
