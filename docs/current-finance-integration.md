@@ -128,6 +128,8 @@ GET https://api.current.finance/user/getObligationList/{address}
 
 API 欄位名是 `supplyAPY` 與 `borrowAPY`，官方前端介面則以 APR 顯示。API 的版本策略、rate limit、可用性承諾與公開相容性文件未知，因此核心餘額與交易前檢查應以鏈上 query 為準，API 適合做 indexer 與顯示資料來源。
 
+MainMarket API 會同時回傳預設主表與收合群組資產。官方前端把 `labelGroup == null` 的資產放在主表，有 `labelGroup` 的資產只有在 `Expand to show all` 後顯示。本專案只顯示 MainMarket 主表，並額外排除 `supplyPaused` 與 `borrowPaused` 同時為 `true` 的資產。Current 市場與持倉名稱只顯示幣種 symbol，不附加市場名稱。Rewards 與 Claim All 仍會讀取使用者的全部 Current obligations。
+
 ## 使用者 supply 與 borrow positions
 
 ### 找出 obligation

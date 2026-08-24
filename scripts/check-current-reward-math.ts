@@ -1,5 +1,6 @@
 import assert from "node:assert/strict"
 
+import { isCurrentMarketVisible } from "../src/lib/current-market-visibility.ts"
 import { calculateCurrentClaimable } from "../src/lib/current-reward-math.ts"
 
 const WAD = 1_000_000_000_000_000_000n
@@ -38,4 +39,12 @@ assert.equal(
   23n
 )
 
-console.log("Current reward math check passed.")
+assert.equal(isCurrentMarketVisible({}), true)
+assert.equal(isCurrentMarketVisible({ borrowPaused: true }), true)
+assert.equal(isCurrentMarketVisible({ labelGroup: ["others", "1"] }), false)
+assert.equal(
+  isCurrentMarketVisible({ borrowPaused: true, supplyPaused: true }),
+  false
+)
+
+console.log("Current checks passed.")

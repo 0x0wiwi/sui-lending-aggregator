@@ -3,6 +3,7 @@ import { Transaction } from "@mysten/sui/transactions"
 import { deriveDynamicFieldID } from "@mysten/sui/utils"
 import BigNumber from "bignumber.js"
 
+import { isCurrentMarketVisible } from "@/lib/current-market-visibility"
 import { calculateCurrentClaimable } from "@/lib/current-reward-math"
 import {
   createPositionKey,
@@ -28,13 +29,7 @@ import type {
 const CURRENT_API = "https://api.current.finance"
 const CURRENT_PACKAGE =
   "0x45bae0425e9098ce5cba3d3fa2836220ad24c9f88aa0dffffb5a52b49319fc70"
-const CURRENT_MARKETS = [
-  "MainMarket",
-  "AltCoinMarket",
-  "EmberMarket",
-  "MatrixGoldMarket",
-  "EthenaMarket",
-] as const
+const CURRENT_MARKET = "MainMarket"
 const WAD = 1_000_000_000_000_000_000n
 
 type ApiResponse<T> = {
@@ -47,6 +42,7 @@ type CurrentMarketRow = {
   apy?: number
   borrowAPY?: number
   hidden?: boolean
+  labelGroup?: unknown
   marketID: string
   marketType: string
   name: string
@@ -79,7 +75,6 @@ type CurrentMarketConfig = {
   marketID: string
   marketType: string
   name: string
-  nickName?: string
   summaries?: CurrentRewardSummary[]
 }
 
@@ -138,6 +133,8 @@ type CurrentClaim = NonNullable<
   NonNullable<RewardSummaryItem["claimMeta"]>["current"]
 >["claims"][number]
 
+let currentMarketPageRequest: Promise<CurrentMarketPage> | null = null
+
 async function fetchCurrentApi<T>(path: string) {
   const response = await fetch(`${CURRENT_API}${path}`)
   if (!response.ok) {
@@ -150,6 +147,18 @@ async function fetchCurrentApi<T>(path: string) {
   return payload.data
 }
 
+async function fetchCurrentMainMarketPage() {
+  if (currentMarketPageRequest) return currentMarketPageRequest
+  currentMarketPageRequest = fetchCurrentApi<CurrentMarketPage>(
+    `/market/getMarketList?marketType=${CURRENT_MARKET}&page=1&size=100`
+  )
+  try {
+    return await currentMarketPageRequest
+  } finally {
+    currentMarketPageRequest = null
+  }
+}
+
 function normalizeCurrentType(value: string) {
   return normalizeCoinType(value.startsWith("0x") ? value : `0x${value}`)
     ?? value
@@ -160,12 +169,14 @@ function toTypeName(value: string) {
   return normalized.startsWith("0x") ? normalized.slice(2) : normalized
 }
 
-function getMarketLabel(config: CurrentMarketConfig) {
-  return config.nickName ?? config.name.replace(/Market$/, " Market")
-}
-
-function getAssetLabel(symbol: string, marketLabel: string) {
-  return `${symbol} (${marketLabel})`
+function getVisibleCurrentAssets(page: CurrentMarketPage) {
+  return new Map(
+    page.content.flatMap((market) => {
+      const symbol = market.tokenInfo?.symbol?.trim()
+      if (!isCurrentMarketVisible(market) || !symbol) return []
+      return [[normalizeCurrentType(market.token), symbol] as const]
+    })
+  )
 }
 
 function getActiveBreakdown(
@@ -312,7 +323,8 @@ async function getClaimableForPool(
 }
 
 async function fetchObligation(
-  obligation: CurrentObligation
+  obligation: CurrentObligation,
+  visibleAssets?: Map<string, string>
 ) {
   const obligationJson = await getObjectJson<CurrentObligationJson>(
     obligation.obligationObject
@@ -344,29 +356,30 @@ async function fetchObligation(
   const debtTypes = obligationJson.debts?.keys?.contents?.map(normalizeCurrentType)
     ?? []
   const allCoinTypes = Array.from(new Set([...depositTypes, ...debtTypes]))
+  const marketName = obligation.marketType.split("::").pop() ?? "Market"
+  const displayedDeposits = marketName === CURRENT_MARKET && visibleAssets
+    ? deposits.filter((deposit) => visibleAssets.has(deposit.coinType))
+    : []
   const rates = await getMarketRates(
     marketId,
     obligation.marketType,
-    depositTypes
+    displayedDeposits.map((deposit) => deposit.coinType)
   )
   const metadataEntries = await Promise.all(
-    allCoinTypes.map(async (coinType) => {
+    displayedDeposits.map(async ({ coinType }) => {
       const { coinMetadata } = await mainnetSuiClient.getCoinMetadata({ coinType })
       return [coinType, coinMetadata] as const
     })
   )
   const metadata = new Map(metadataEntries)
-  const marketName = obligation.marketType.split("::").pop() ?? "Market"
-  const marketLabel = marketName.replace(/Market$/, " Market")
-  const positions = deposits.flatMap((deposit) => {
+  const positions = displayedDeposits.flatMap((deposit) => {
     const coinMetadata = metadata.get(deposit.coinType)
     const exchangeRate = rates.get(deposit.coinType)
-    if (!coinMetadata || exchangeRate === undefined) return []
+    const symbol = visibleAssets?.get(deposit.coinType)
+    if (!coinMetadata || exchangeRate === undefined || !symbol) return []
     const amountAtomic = deposit.ctokenAmount * exchangeRate / WAD
-    const symbol = coinMetadata.symbol.trim()
-    if (!symbol) return []
     return [{
-      asset: getAssetLabel(symbol, marketLabel),
+      asset: symbol,
       amount: new BigNumber(amountAtomic.toString())
         .shiftedBy(-coinMetadata.decimals)
         .toNumber(),
@@ -396,26 +409,20 @@ async function fetchObligation(
       ),
     ])
   )).flat()
-  return { claims, metadata, positions }
+  return { claims, positions }
 }
 
 export async function fetchCurrentMarket(): Promise<MarketOnlyResult> {
-  const [configs, pages] = await Promise.all([
+  const [configs, page] = await Promise.all([
     fetchCurrentApi<CurrentMarketConfig[]>(
       "/pebbleWeb3Config/getAllMarketConfig"
     ),
-    Promise.all(
-      CURRENT_MARKETS.map((market) =>
-        fetchCurrentApi<CurrentMarketPage>(
-          `/market/getMarketList?marketType=${market}&page=1&size=100`
-        )
-      )
-    ),
+    fetchCurrentMainMarketPage(),
   ])
   const configByName = new Map(configs.map((config) => [config.name, config]))
   return {
-    rows: pages.flatMap((page) => page.content).flatMap((market) => {
-      if (market.hidden) return []
+    rows: page.content.flatMap((market) => {
+      if (!isCurrentMarketVisible(market)) return []
       const config = configByName.get(market.name)
       const coinType = normalizeCurrentType(market.token)
       const symbol = market.tokenInfo?.symbol?.trim()
@@ -440,7 +447,7 @@ export async function fetchCurrentMarket(): Promise<MarketOnlyResult> {
         ? 0
         : sumBreakdown(borrowBreakdown)
       return [{
-        asset: getAssetLabel(symbol, getMarketLabel(config)),
+        asset: symbol,
         coinType,
         protocol: "Current" as const,
         supplyApr: supplyBaseApr + supplyIncentiveApr,
@@ -461,10 +468,16 @@ export async function fetchCurrentUser(
   address?: string | null
 ): Promise<UserOnlyResult> {
   if (!address) return { positions: {} }
-  const obligations = await fetchCurrentApi<CurrentObligation[]>(
-    `/user/getObligationList/${address}`
+  const [obligations, page] = await Promise.all([
+    fetchCurrentApi<CurrentObligation[]>(
+      `/user/getObligationList/${address}`
+    ),
+    fetchCurrentMainMarketPage(),
+  ])
+  const visibleAssets = getVisibleCurrentAssets(page)
+  const results = await Promise.all(
+    obligations.map((obligation) => fetchObligation(obligation, visibleAssets))
   )
-  const results = await Promise.all(obligations.map(fetchObligation))
   const positions = results.reduce<WalletPositions>((acc, result) => {
     result.positions.forEach((position) => {
       const key = createPositionKey("Current", position.asset)
@@ -509,6 +522,16 @@ export async function fetchCurrentUser(
     claimMeta: { current: { claims } },
   }
   return { positions, rewardSummary }
+}
+
+export async function fetchCurrentClaims(address: string) {
+  const obligations = await fetchCurrentApi<CurrentObligation[]>(
+    `/user/getObligationList/${address}`
+  )
+  const results = await Promise.all(obligations.map((obligation) =>
+    fetchObligation(obligation)
+  ))
+  return results.flatMap((result) => result.claims)
 }
 
 export async function fetchCurrent(

@@ -102,9 +102,8 @@ export function createClaimBuilders({
     if (!accountAddress || !hasCurrentClaim) {
       return { inputs: [], hasClaim: false }
     }
-    const { fetchCurrentUser } = await import("@/lib/market-fetch/current")
-    const freshClaims = (await fetchCurrentUser(accountAddress))
-      .rewardSummary?.claimMeta?.current?.claims ?? []
+    const { fetchCurrentClaims } = await import("@/lib/market-fetch/current")
+    const freshClaims = await fetchCurrentClaims(accountAddress)
     const coinMap = new Map<string, TransactionObjectArgument[]>()
     const amountMap = new Map<string, BN>()
     freshClaims.forEach((claim) => {
